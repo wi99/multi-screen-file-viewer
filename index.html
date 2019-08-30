@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<style>
+#mydiv {
+  position: absolute;
+  cursor: move;
+}
+
+</style>
+<body id="bod" style="margin: 0px; background: #0e0e0e; overflow: hidden">
+
+<div id="mydiv">
+  <img src="4k.jpg" alt="Image">
+</div>
+
+<!-- TODO: toggle for local dragging or dragging on all screens -->
+
+<script>
+
+// https://stackoverflow.com/a/11409944	
+Number.prototype.clamp = function(min, max) {
+  return Math.min(Math.max(this, min), max);
+};
+
+//Make the DIV element draggagle:
+dragElement(document.getElementById("mydiv"));
+
+function dragElement(elmnt) { // elmnt is div, elmnt.children[0] is img
+  var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+  elmnt.onmousedown = dragMouseDown;
+
+  function dragMouseDown(e) {
+    e = e || window.event;
+    e.preventDefault();
+    // get the mouse cursor position at startup:
+    pos3 = e.clientX;
+    pos4 = e.clientY;
+    document.onmouseup = closeDragElement;
+    // call a function whenever the cursor moves:
+    document.onmousemove = elementDrag;
+  }
+
+  function elementDrag(e) { // TODO: websocket so it also drags on the other screens
+    e = e || window.event;
+    e.preventDefault();
+    // calculate the new cursor position:
+    pos1 = pos3 - e.clientX;
+    pos2 = pos4 - e.clientY;
+    pos3 = e.clientX;
+    pos4 = e.clientY;
+    // set the element's new position:
+    elmnt.style.top = (elmnt.offsetTop - pos2).clamp(40-elmnt.children[0].height, window.innerHeight-40) + "px";
+    elmnt.style.left = (elmnt.offsetLeft - pos1).clamp(40-elmnt.children[0].width, window.innerWidth-40) + "px";
+  }
+
+  function closeDragElement() {
+    /* stop moving when mouse button is released:*/
+    document.onmouseup = null;
+    document.onmousemove = null;
+  }
+}
+</script>
+
+</body>
+</html>
+
