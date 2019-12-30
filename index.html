@@ -9,19 +9,20 @@
 </style>
 <body id="bod" style="margin: 0px; background: #0e0e0e; overflow: hidden">
 
-<div id="mydiv">
-  <img src="4k.jpg" alt="Image">
+<div id="mydiv" style="top: 0px; left: 0px;">
+  <img src="4k.jpg" alt="Image Not Loaded">
 </div>
 
 <!-- TODO: toggle for local dragging or dragging on all screens -->
 
 <script>
 
-// https://stackoverflow.com/a/11409944	
+// https://stackoverflow.com/a/11409944
 Number.prototype.clamp = function(min, max) {
   return Math.min(Math.max(this, min), max);
 };
-
+var asdf = []
+// https://www.w3schools.com/howto/howto_js_draggable.asp
 //Make the DIV element draggagle:
 dragElement(document.getElementById("mydiv"));
 
@@ -58,6 +59,27 @@ function dragElement(elmnt) { // elmnt is div, elmnt.children[0] is img
     document.onmouseup = null;
     document.onmousemove = null;
   }
+  
+  var i=0
+  // https://developer.mozilla.org/en-US/docs/Web/API/Element/wheel_event
+  function zoom(event) {
+    event.preventDefault();
+
+    scale += event.deltaY * -0.001; // Not sure if instead should have wheel linearly control the size, instead of based on multiplier (since change is exponential)
+    console.log(event.deltaY)
+    asdf.push(event)
+
+    // Restrict scale
+    scale = scale.clamp(0.02, 4);
+
+    // Apply scale transform
+    elmnt.style.transform = `scale(${scale})`;
+  }
+
+  let scale = 1;
+  elmnt.onwheel = zoom;
+  
+  
 }
 </script>
 
