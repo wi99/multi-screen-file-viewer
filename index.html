@@ -7,9 +7,15 @@
 }
 
 </style>
+
+<head>
+  <!-- disable zooming mobile https://stackoverflow.com/a/21245567 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+</head>
+
 <body id="bod" style="margin: 0px; background: #0e0e0e; overflow: hidden">
 
-<div id="mydiv" style="top: 0px; left: 0px;">
+<div id="mydiv" style="top: 0px; left: 0px; position: absolute;">
   <img src="4k.jpg" alt="Image Not Loaded">
 </div>
 
@@ -24,51 +30,74 @@ Number.prototype.clamp = function(min, max) {
 
 var selfMove = false;
 var mydiv = document.getElementById("mydiv");
-// https://www.w3schools.com/howto/howto_js_draggable.asp
-//Make the DIV element draggagle:
+//Make the DIV element draggable:
 dragElement(mydiv);
 
-websocket = new WebSocket("ws://" + document.location.hostname + ":6789/");
+if (!window.location.hostname)
+  websocket = new WebSocket("ws://localhost:6789/");
+else
+  websocket = new WebSocket("ws://" + window.location.hostname + ":6789/");
+
+function sendDim(event) {
+  var width = Math.min(window.innerWidth, window.outerWidth); // android 4.4 chrome where outerWidth is correct and innerWidth too big
+  var height = Math.min(window.innerHeight, window.outerHeight);
+  websocket.send(JSON.stringify({type: 'dim', w: width, h: height}));
+};
+
+websocket.onopen = sendDim;
+window.onresize = sendDim;
 
 function dragElement(elmnt) { // elmnt is div, elmnt.children[0] is img
-  var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-  elmnt.onmousedown = dragMouseDown;
+  var currentX, currentY, initialX, initialY;
+  elmnt.onmousedown = elmnt.ontouchstart = dragStart;
 
-  function dragMouseDown(e) {
+  function dragStart(e) {
     e = e || window.event;
-    e.preventDefault();
-    // get the mouse cursor position at startup:
-    pos3 = e.clientX;
-    pos4 = e.clientY;
-    document.onmouseup = closeDragElement;
+    if (e.type != "touchstart") e.preventDefault();
+    if (e.type === "touchstart") {
+      initialX = e.touches[0].clientX;
+      initialY = e.touches[0].clientY;
+    } else {
+      initialX = e.clientX;
+      initialY = e.clientY;
+    }
+    selfMove = true;
     // call a function whenever the cursor moves:
-    document.onmousemove = elementDrag;
+    document.onmousemove = document.ontouchmove = elementDrag;
+    document.onmouseup = document.ontouchend = dragEnd;
   }
 
   function elementDrag(e) {
-    selfMove = true;
     e = e || window.event;
-    e.preventDefault();
-    // calculate the new cursor position:
-    pos1 = pos3 - e.clientX;
-    pos2 = pos4 - e.clientY;
-    pos3 = e.clientX;
-    pos4 = e.clientY;
+    if (e.type != "touchmove") e.preventDefault();
+    if (e.type === "touchmove") {
+      currentX = e.touches[0].clientX - initialX;
+      currentY = e.touches[0].clientY - initialY;
+      initialX = e.touches[0].clientX;
+      initialY = e.touches[0].clientY;
+    } else {
+      currentX = e.clientX - initialX;
+      currentY = e.clientY - initialY;
+      initialX = e.clientX;
+      initialY = e.clientY;
+    }
     // set the element's new position:
-    var y = (elmnt.offsetTop - pos2).clamp(40-elmnt.children[0].height, window.innerHeight-40);
+    var width = Math.min(window.innerWidth, window.outerWidth);
+    var height = Math.min(window.innerHeight, window.outerHeight);
+    var y = Math.round((elmnt.offsetTop + currentY).clamp(40-elmnt.children[0].height, height-40));
+    var x = Math.round((elmnt.offsetLeft + currentX).clamp(40-elmnt.children[0].width, width-40));
     elmnt.style.top = y + "px";
-    //console.log("top " + elmnt.style.top)
-    var x = (elmnt.offsetLeft - pos1).clamp(40-elmnt.children[0].width, window.innerWidth-40);
     elmnt.style.left = x + "px";
-    //console.log("left " + elmnt.style.left)
-    websocket.send(JSON.stringify({x: x, y: y}));
-    selfMove = false;
+    websocket.send(JSON.stringify({type: 'pos', x: x, y: y}));
   }
 
-  function closeDragElement() {
+  function dragEnd(e) {
+   // initialX = currentX;
+  //  initialY = currentY;
+    selfMove = false;
     /* stop moving when mouse button is released:*/
-    document.onmouseup = null;
-    document.onmousemove = null;
+    document.onmouseup = document.ontouchend = null; // FF not support this i think
+    document.onmousemove = document.ontouchmove = null;
   }
   /*
   var i=0
@@ -95,7 +124,7 @@ function dragElement(elmnt) { // elmnt is div, elmnt.children[0] is img
 websocket.onmessage = function(event) {
   data = JSON.parse(event.data);
   switch (data.type) {
-    case 'state':
+    case 'pos':
       if (!selfMove){
         mydiv.style.top = data.y + "px";
         mydiv.style.left = data.x + "px";
