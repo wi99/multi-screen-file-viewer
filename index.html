@@ -1,27 +1,49 @@
 <!DOCTYPE html>
 <html>
-<style>
-#mydiv {
-  position: absolute;
-  cursor: move;
-}
-
-</style>
-
 <head>
   <!-- disable zooming mobile https://stackoverflow.com/a/21245567 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="css/styles.css" />
 </head>
 
-<body id="bod" style="margin: 0px; background: #0e0e0e; overflow: hidden">
-
-<div id="mydiv" style="top: 0px; left: 0px; position: absolute;">
-  <img src="4k.jpg" alt="Image Not Loaded">
+<body>
+<div id="controls-container">
+  <div id="controls" class="controls" data-state="hidden">
+    <button id="playpause" type="button" data-state="play">Play/Pause</button>
+    <div class="progress">
+      <progress id="progress" value="0" min="0">
+        <span id="progress-bar"></span>
+      </progress>
+    </div>
+    <button id="mute" type="button" data-state="unmute">Mute/Unmute</button>
+    <button id="volinc" type="button" data-state="volup">Vol+</button>
+    <button id="voldec" type="button" data-state="voldown">Vol-</button>
+  </div>
+</div>
+<div id="container" style="width: 100%; height: 100%;">
+  <!--<img id="display" src="4k.jpg" alt="Image Not Loaded">-->
+  <video id="display" muted>
+  <source src="video.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+  </video>
 </div>
 
-<!-- TODO: toggle for local dragging or dragging on all screens -->
+<script src="js/video-player.js"></script>
 
 <script>
+var cc = document.getElementById('controls-container')
+var controls = document.getElementById('controls')
+controls.style.opacity = 0;
+cc.onmouseenter = function(event){
+  controls.style.pointerEvents = 'auto';
+  controls.style.opacity = 1;
+}
+cc.onmouseleave = function(event){
+  if (cc.offsetHeight >= document.getElementById('container').offsetTop){
+    controls.style.pointerEvents = 'none';
+    controls.style.opacity = 0;
+  }
+}
 
 // https://stackoverflow.com/a/11409944
 Number.prototype.clamp = function(min, max) {
@@ -29,9 +51,11 @@ Number.prototype.clamp = function(min, max) {
 };
 
 var selfMove = false;
-var mydiv = document.getElementById("mydiv");
+var div = document.getElementById("container");
 //Make the DIV element draggable:
-dragElement(mydiv);
+dragElement(div);
+
+var video = document.getElementById('display');
 
 if (!window.location.hostname)
   websocket = new WebSocket("ws://localhost:6789/");
@@ -43,15 +67,45 @@ function sendDim(event) {
   var height = Math.min(window.innerHeight, window.outerHeight);
   websocket.send(JSON.stringify({type: 'dim', w: width, h: height}));
 };
-
-websocket.onopen = sendDim;
 window.onresize = sendDim;
+websocket.onopen = sendDim;
+
+websocket.onmessage = function(event) {
+  data = JSON.parse(event.data);
+  switch (data.type) {
+    case 'pos':
+      if (!selfMove){
+        div.style.top = data.y + "px";
+        div.style.left = data.x + "px";
+      }
+      break;
+    case 'dim':
+      div.style.width = data.w;
+      div.style.height = data.h;
+      break;
+    case 'ctrl':
+      video.currentTime = data.time;
+      switch (data.action){
+        case 'pause':
+          video.pause();
+          break;
+        case 'play':
+          video.play();
+          break;
+      }
+      break;
+    default:
+      console.error(
+        "unsupported event", data);
+  }
+};
 
 function dragElement(elmnt) { // elmnt is div, elmnt.children[0] is img
   var currentX, currentY, initialX, initialY;
   elmnt.onmousedown = elmnt.ontouchstart = dragStart;
 
   function dragStart(e) {
+    cc.style.pointerEvents = 'none'; // I was hoping this would prevent accidental clicks but it does not.
     e = e || window.event;
     if (e.type != "touchstart") e.preventDefault();
     if (e.type === "touchstart") {
@@ -84,19 +138,18 @@ function dragElement(elmnt) { // elmnt is div, elmnt.children[0] is img
     // set the element's new position:
     var width = Math.min(window.innerWidth, window.outerWidth);
     var height = Math.min(window.innerHeight, window.outerHeight);
-    var y = Math.round((elmnt.offsetTop + currentY).clamp(40-elmnt.children[0].height, height-40));
-    var x = Math.round((elmnt.offsetLeft + currentX).clamp(40-elmnt.children[0].width, width-40));
+    var y = Math.round((elmnt.offsetTop + currentY).clamp(40-elmnt.offsetHeight, height-40));
+    var x = Math.round((elmnt.offsetLeft + currentX).clamp(40-elmnt.offsetWidth, width-40));
     elmnt.style.top = y + "px";
     elmnt.style.left = x + "px";
     websocket.send(JSON.stringify({type: 'pos', x: x, y: y}));
   }
 
   function dragEnd(e) {
-   // initialX = currentX;
-  //  initialY = currentY;
+    cc.style.pointerEvents = 'auto';
     selfMove = false;
     /* stop moving when mouse button is released:*/
-    document.onmouseup = document.ontouchend = null; // FF not support this i think
+    document.onmouseup = document.ontouchend = null;
     document.onmousemove = document.ontouchmove = null;
   }
   /*
@@ -120,26 +173,6 @@ function dragElement(elmnt) { // elmnt is div, elmnt.children[0] is img
   */
   
 }
-
-websocket.onmessage = function(event) {
-  data = JSON.parse(event.data);
-  switch (data.type) {
-    case 'pos':
-      if (!selfMove){
-        mydiv.style.top = data.y + "px";
-        mydiv.style.left = data.x + "px";
-      }
-      break;
-/*    case 'users':
-      users.textContent = (
-        data.count.toString() + " user" +
-        (data.count == 1 ? "" : "s"));
-      break;*/
-    default:
-      console.error(
-        "unsupported event", data);
-  }
-};
 </script>
 
 </body>
