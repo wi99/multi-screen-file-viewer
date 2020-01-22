@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+
+<body>
+<div id="controlsContainer">
+  <div id="controls" class="controls" data-state="hidden">
+    <button id="playpause" type="button" data-state="play">Play/Pause</button>
+    <div class="progress">
+      <progress id="progress" value="0" min="0">
+        <span id="progress-bar"></span>
+      </progress>
+    </div>
+    <button id="mute" type="button" data-state="unmute">Mute/Unmute</button>
+    <button id="volinc" type="button" data-state="volup">Vol+</button>
+    <button id="voldec" type="button" data-state="voldown">Vol-</button>
+  </div>
+</div>
+<div id="container" style="width: 100%; height: 100%;">
+  <video id="display" muted>
+  <source src="video.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+  </video>
+</div>
+
+<script src="js/video-player.js"></script>
+<script>
+var cc = document.getElementById('controlsContainer')
+var controls = document.getElementById('controls')
+controls.style.opacity = 0;
+cc.onmouseenter = function(event){
+  controls.style.pointerEvents = 'auto';
+  controls.style.opacity = 1;
+}
+cc.onmouseleave = function(event){
+  if (cc.offsetHeight >= document.getElementById('container').offsetTop){
+    controls.style.pointerEvents = 'none';
+    controls.style.opacity = 0;
+  }
+}
+</script>
+
+<script src="js/constants.js"></script>
+<script src="js/draggable.js"></script>
+
+</body>
+</html>
+

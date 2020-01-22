@@ -1,3 +1,6 @@
+// https://github.com/iandevlin/iandevlin.github.io/tree/master/mdn/video-player-styled
+// this might be too short to do the license, not sure.
+
 (function () {
 	'use strict';
 

@@ -16,13 +16,11 @@ div {
 #display {
   object-fit: contain;
   overflow: hidden;
-  height: 100%;
-  width: 100%;
   display: block;
 }
-#controls-container {
+#controlsContainer {
   width: 100%;
-  height: 8%;
+  height: 32px;
   z-index: 99;
   position: fixed;
   opacity: 0.8;

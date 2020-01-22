@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html dir="ltr">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="stylesheet" href="css/styles.css" />
+      <link rel="stylesheet" href="css/pdf/viewer.css">
+
+</head>
+
+<body>
+
+<div id="outerContainer">
+<div id="controlsContainer">
+  <div id="secondaryToolbar" class="secondaryToolbar doorHangerRight hidden">
+    <div id="secondaryToolbarButtonContainer" style="max-height: 877px;">
+      <button id="secondaryPresentationMode" class="secondaryToolbarButton presentationMode visibleLargeView" title="Switch to Presentation Mode" tabindex="51">
+        <span>Presentation Mode</span>
+      </button>
+
+      <button id="secondaryOpenFile" class="secondaryToolbarButton openFile visibleLargeView" title="Open File" tabindex="52">
+        <span>Open</span>
+      </button>
+
+      <button id="secondaryPrint" class="secondaryToolbarButton print visibleMediumView" title="Print" tabindex="53">
+        <span>Print</span>
+      </button>
+
+      <button id="secondaryDownload" class="secondaryToolbarButton download visibleMediumView" title="Download" tabindex="54">
+        <span>Download</span>
+      </button>
+
+      <a href="#" id="secondaryViewBookmark" class="secondaryToolbarButton bookmark visibleSmallView" title="Current view (copy or open in new window)" tabindex="55">
+        <span>Current View</span>
+      </a>
+
+      <div class="horizontalToolbarSeparator visibleLargeView"></div>
+
+      <button id="firstPage" class="secondaryToolbarButton firstPage" title="Go to First Page" tabindex="56">
+        <span>Go to First Page</span>
+      </button>
+      <button id="lastPage" class="secondaryToolbarButton lastPage" title="Go to Last Page" tabindex="57">
+        <span>Go to Last Page</span>
+      </button>
+
+      <div class="horizontalToolbarSeparator"></div>
+
+      <button id="pageRotateCw" class="secondaryToolbarButton rotateCw" title="Rotate Clockwise" tabindex="58">
+        <span>Rotate Clockwise</span>
+      </button>
+      <button id="pageRotateCcw" class="secondaryToolbarButton rotateCcw" title="Rotate Counterclockwise" tabindex="59">
+        <span>Rotate Counterclockwise</span>
+      </button>
+
+      <div class="horizontalToolbarSeparator"></div>
+
+      <button id="cursorSelectTool" class="secondaryToolbarButton selectTool toggled" title="Enable Text Selection Tool" tabindex="60">
+        <span>Text Selection Tool</span>
+      </button>
+      <button id="cursorHandTool" class="secondaryToolbarButton handTool" title="Enable Hand Tool" tabindex="61">
+        <span>Hand Tool</span>
+      </button>
+
+      <div class="horizontalToolbarSeparator"></div>
+
+      <button id="scrollVertical" class="secondaryToolbarButton scrollModeButtons scrollVertical" title="Use Vertical Scrolling" tabindex="62">
+        <span>Vertical Scrolling</span>
+      </button>
+      <button id="scrollHorizontal" class="secondaryToolbarButton scrollModeButtons scrollHorizontal" title="Use Horizontal Scrolling" tabindex="63">
+        <span>Horizontal Scrolling</span>
+      </button>
+      <button id="scrollWrapped" class="secondaryToolbarButton scrollModeButtons scrollWrapped" title="Use Wrapped Scrolling" tabindex="64">
+        <span>Wrapped Scrolling</span>
+      </button>
+      <!-- $FB: bookflip button -->
+      <button id="bookFlip" class="secondaryToolbarButton scrollModeButtons bookFlip toggled" title="Use Book Flip" tabindex="65">
+        <span>Book Flip</span>
+      </button>
+
+      <div class="horizontalToolbarSeparator scrollModeButtons"></div>
+
+      <button id="spreadNone" class="secondaryToolbarButton spreadModeButtons spreadNone toggled" title="Do not join page spreads" tabindex="66">
+        <span>No Spreads</span>
+      </button>
+      <button id="spreadOdd" class="secondaryToolbarButton spreadModeButtons spreadOdd" title="Join page spreads starting with odd-numbered pages" tabindex="67" disabled="">
+        <span>Odd Spreads</span>
+      </button>
+      <button id="spreadEven" class="secondaryToolbarButton spreadModeButtons spreadEven" title="Join page spreads starting with even-numbered pages" tabindex="68">
+        <span>Even Spreads</span>
+      </button>
+
+      <div class="horizontalToolbarSeparator spreadModeButtons"></div>
+
+      <button id="documentProperties" class="secondaryToolbarButton documentProperties" title="Document Properties…" tabindex="69">
+        <span>Document Properties…</span>
+      </button>
+    </div>
+  </div>
+  <div class="findbar doorHanger hidden" id="findbar">
+    <div id="findbarInputContainer">
+      <input id="findInput" class="toolbarField" title="Find" placeholder="Find in document…" tabindex="91" data-status="">
+      <div class="splitToolbarButton">
+        <button id="findPrevious" class="toolbarButton findPrevious" title="Find the previous occurrence of the phrase" tabindex="92">
+          <span>Previous</span>
+        </button>
+        <div class="splitToolbarButtonSeparator"></div>
+        <button id="findNext" class="toolbarButton findNext" title="Find the next occurrence of the phrase" tabindex="93">
+          <span>Next</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="findbarOptionsOneContainer">
+      <input type="checkbox" id="findHighlightAll" class="toolbarField" tabindex="94">
+      <label for="findHighlightAll" class="toolbarLabel">Highlight all</label>
+      <input type="checkbox" id="findMatchCase" class="toolbarField" tabindex="95">
+      <label for="findMatchCase" class="toolbarLabel">Match case</label>
+    </div>
+    <div id="findbarOptionsTwoContainer">
+      <input type="checkbox" id="findEntireWord" class="toolbarField" tabindex="96">
+      <label for="findEntireWord" class="toolbarLabel">Whole words</label>
+      <span id="findResultsCount" class="toolbarLabel hidden"></span>
+    </div>
+
+    <div id="findbarMessageContainer">
+      <span id="findMsg" class="toolbarLabel"></span>
+    </div>
+  </div>
+  <div id="toolbarViewer">
+    <div id="toolbarViewerLeft">
+      <button id="sidebarToggle" class="toolbarButton" title="Toggle Sidebar" tabindex="11">
+        <span>Toggle Sidebar</span>
+      </button>
+      <div class="toolbarButtonSpacer"></div>
+      <button id="viewFind" class="toolbarButton" title="Find in Document" tabindex="12">
+        <span>Find</span>
+      </button>
+      <div class="splitToolbarButton hiddenSmallView">
+        <button class="toolbarButton pageUp" title="Previous Page" id="previous" tabindex="13">
+          <span>Previous</span>
+        </button>
+        <div class="splitToolbarButtonSeparator"></div>
+        <button class="toolbarButton pageDown" title="Next Page" id="next" tabindex="14">
+          <span>Next</span>
+        </button>
+      </div>
+      <input type="number" id="pageNumber" class="toolbarField pageNumber" title="Page" value="1" size="4" min="1" tabindex="15">
+      <span id="numPages" class="toolbarLabel"></span>
+    </div>
+    <div id="toolbarViewerRight">
+      <button id="presentationMode" class="toolbarButton presentationMode hiddenLargeView" title="Switch to Presentation Mode" tabindex="31">
+        <span>Presentation Mode</span>
+      </button>
+
+      <button id="openFile" class="toolbarButton openFile hiddenLargeView" title="Open File" tabindex="32">
+        <span>Open</span>
+      </button>
+
+      <button id="print" class="toolbarButton print hiddenMediumView" title="Print" tabindex="33">
+        <span>Print</span>
+      </button>
+
+      <button id="download" class="toolbarButton download hiddenMediumView" title="Download" tabindex="34">
+        <span>Download</span>
+      </button>
+      <a href="#" id="viewBookmark" class="toolbarButton bookmark hiddenSmallView" title="Current view (copy or open in new window)" tabindex="35">
+        <span>Current View</span>
+      </a>
+
+      <div class="verticalToolbarSeparator hiddenSmallView"></div>
+
+      <button id="secondaryToolbarToggle" class="toolbarButton" title="Tools" tabindex="36">
+        <span>Tools</span>
+      </button>
+    </div>
+    <div id="toolbarViewerMiddle">
+      <div class="splitToolbarButton">
+        <button id="zoomOut" class="toolbarButton zoomOut" title="Zoom Out" tabindex="21">
+          <span>Zoom Out</span>
+        </button>
+        <div class="splitToolbarButtonSeparator"></div>
+        <button id="zoomIn" class="toolbarButton zoomIn" title="Zoom In" tabindex="22">
+          <span>Zoom In</span>
+        </button>
+      </div>
+      <span id="scaleSelectContainer" class="dropdownToolbarButton">
+        <select id="scaleSelect" title="Zoom" tabindex="23">
+          <option id="pageAutoOption" title="" value="auto" selected="selected">Automatic Zoom</option>
+          <option id="pageActualOption" title="" value="page-actual">Actual Size</option>
+          <option id="pageFitOption" title="" value="page-fit">Page Fit</option>
+          <option id="pageWidthOption" title="" value="page-width">Page Width</option>
+          <option id="customScaleOption" title="" value="custom" disabled="disabled" hidden="true"></option>
+          <option title="" value="0.5">50%</option>
+          <option title="" value="0.75">75%</option>
+          <option title="" value="1">100%</option>
+          <option title="" value="1.25">125%</option>
+          <option title="" value="1.5">150%</option>
+          <option title="" value="2">200%</option>
+          <option title="" value="3">300%</option>
+          <option title="" value="4">400%</option>
+        </select>
+      </span>
+    </div>
+  </div>
+</div>
+<div id="container" style="width: 100%; height: 100%;">
+  <canvas id="display" style="border: 1px solid black; direction: ltr;"></canvas>
+</div>
+</div>
+
+<script src="js/pdfjs/pdf.js"></script>
+<script src="js/viewer.js"></script>
+<script>
+  // If absolute URL from the remote server is provided, configure the CORS header on that server.
+  var url = './document.pdf';
+
+  // The workerSrc property shall be specified.
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'js/pdfjs/pdf.worker.js';
+
+  // Asynchronous download PDF
+  var loadingTask = pdfjsLib.getDocument(url);
+  
+  var rendering = false;
+  var renderedPage = 0;
+
+  function endRender(){
+    rendering = false;
+    if (queue.pop()) {
+      queue = []; // not sure if i should use a queue if i only care to hold 1 value.
+      loadingTask.promise.then(renderPages);
+    }
+  }
+  var renderedScale = 0;
+  function renderPage(page) {
+    if (rendering == true) {
+      console.log('???');
+      return;
+    }
+    rendering = true;
+
+    var container = document.getElementById('container')
+    var canvas = document.getElementById('display');
+
+    var desiredWidth = container.offsetWidth;
+    var desiredHeight = container.offsetHeight;
+    var viewport = page.getViewport({ scale: 1, });
+    if (container.style.width == 'auto') {
+      var scale = desiredHeight / viewport.height;
+    }
+    else if (container.style.height == 'auto') {
+      var scale = desiredWidth / viewport.width;
+    }
+    else {
+      var scale = Math.min(desiredWidth / viewport.width, desiredHeight / viewport.height);
+    }
+    if (scale == renderedScale) return endRender();
+    renderedScale = scale;
+    
+    var scaledViewport = page.getViewport({ scale: scale, });
+
+    var context = canvas.getContext('2d');
+    canvas.height = scaledViewport.height;
+    canvas.width = scaledViewport.width;
+
+    // Render PDF page into canvas context
+    var renderContext = {
+      canvasContext: context,
+      viewport: scaledViewport,
+    };
+    var pageRendering = page.render(renderContext);
+    pageRendering.promise.then(endRender)
+    PDFViewerApplication.renderedPage = page.pageNumber;
+  }
+
+  var gottenPage;
+  function renderPages(pdf) {
+    // Fetch the page
+    gottenPage = pdf.getPage(PDFViewerApplication.page);
+    gottenPage.then(renderPage);
+    PDFViewerApplication.numPages = pdf.numPages;
+    config.toolbar.numPages.textContent = 'of ' + pdf.numPages;
+    
+  }
+  
+  var queue = [];
+  
+  // event listener to dynamically resize page
+  container.addEventListener('resize', function(elem){
+      if (!rendering && gottenPage) gottenPage.then(renderPage);
+      else queue.push(1); // meaningless number I just need to push.
+//      console.log(queue);
+  }, false)
+
+  
+  PDFViewerApplication.page = 1;
+  loadingTask.promise.then(renderPages);
+  
+  
+  window.addEventListener('resize', function(elem){
+    var container = document.getElementById('container')
+    var event = new CustomEvent('resize');
+    container.dispatchEvent(event);
+  }, false)
+</script>
+<script src="js/constants.js"></script>
+<script src="js/draggable.js"></script>
+
+</body>
+</html>
+

@@ -1,5 +1,4 @@
-
-
+import argparse
 import asyncio
 import json
 import logging
@@ -17,16 +16,22 @@ SCREENS = set() # aka connected
 windowSizes = {} # key: websocket, value: (l,w)
 offsets = {} # key: websocket, value: x,y. values are 0 or negative
 
-totalWidth = 0
-totalHeight = 0
-maxWidth = 0
-maxHeight = 0
+class Dimensions:
+	totalWidth = 0
+	totalHeight = 0
+	maxWidth = 0
+	maxHeight = 0
+
 
 # TODO: make these persist after exiting program.
 class VideoState:
 	saveTime = time.time()
 	playbackTime = 0
 	paused = True
+
+class PDFState:
+	page = 1
+
 
 def pos_event(ws):
 	return json.dumps(
@@ -36,12 +41,12 @@ def pos_event(ws):
 	)
 
 def dim_event():
-	## Fit Width
-	#return json.dumps({'type': 'dim', 'w': str(totalWidth) + 'px', 'h': 'auto'})
-	## Fit Height
-	#return json.dumps({'type': 'dim', 'w': 'auto', 'h': str(totalHeight) + 'px'})
-	## Fit Page
-	return json.dumps({'type': 'dim', 'w': str(totalWidth) + 'px', 'h': str(maxHeight) + 'px'})
+	if args.fit == 'width': ## Fit Width
+		return json.dumps({'type': 'dim', 'w': str(Dimensions.totalWidth) + 'px', 'h': 'auto'})
+	elif args.fit == 'height': ## Fit Height
+		return json.dumps({'type': 'dim', 'w': 'auto', 'h': str(Dimensions.totalHeight) + 'px'})
+	else: ## Fit Page
+		return json.dumps({'type': 'dim', 'w': str(Dimensions.totalWidth) + 'px', 'h': str(Dimensions.maxHeight) + 'px'})
 
 def action_event(action):
 	return json.dumps({'type': 'ctrl', 'action': action})
@@ -67,25 +72,30 @@ async def register(websocket):
 	# logic for how to arrange the displays
 	if not offsets:
 		offsets[websocket] = [0,0]
-	else: #right now just extending displays to the right
-		global totalWidth
-		offsets[websocket] = [-totalWidth, 0]
+	else: # extending displays to the right for fitwidth and fitpage
+		if args.fit != 'height':
+			offsets[websocket] = [-Dimensions.totalWidth, 0]
+		else:
+			offsets[websocket] = [0, -Dimensions.totalHeight]
+
 
 	windowSizes[websocket] = (0,0)
 	
-	if not VideoState.paused:
-		VideoState.playbackTime += time.time() - VideoState.saveTime
-	action = 'pause' if VideoState.paused else 'play'
-	await websocket.send(json.dumps({"type": "ctrl", "action": action, "time": VideoState.playbackTime}))
+	if args.filetype == 'video':
+		if not VideoState.paused:
+			VideoState.playbackTime += time.time() - VideoState.saveTime
+		action = 'pause' if VideoState.paused else 'play'
+		await websocket.send(json.dumps({"type": "ctrl", "action": action, "time": VideoState.playbackTime}))
+	if args.filetype == 'pdf':
+		await websocket.send(json.dumps({'value': str(PDFState.page), 'type': "ctrl", 'action': "pagenumberchanged"}))
 
 
 async def unregister(websocket):
 	SCREENS.remove(websocket)
 	w,h = windowSizes.pop(websocket, (0,0))
 
-	global totalWidth, totalHeight
-	totalWidth -= w
-	totalHeight -= h
+	Dimensions.totalWidth -= w
+	Dimensions.totalHeight -= h
 
 	# rearrange displays
 	x,y = offsets.pop(websocket, (0,0))
@@ -98,14 +108,13 @@ async def unregister(websocket):
 		# general
 		POSITION['x'] = POSITION['y'] = 0 # TODO: if something long like pdf only x goes to zero but y stays the same
 	else:
-		global maxWidth, maxHeight
-		maxWidth = max(windowSizes.values())[0]
-		maxHeight = max(windowSizes.values(), key=lambda x:x[1])[1]
+		Dimensions.maxWidth = max(windowSizes.values())[0]
+		Dimensions.maxHeight = max(windowSizes.values(), key=lambda x:x[1])[1]
 	
 	# save values
-	## video
-	if not VideoState.paused:
-		VideoState.playbackTime += time.time() - VideoState.saveTime # will be inaccurate if the last client disconnects the wrong way.
+	if args.filetype == 'video':
+		if not VideoState.paused:
+			VideoState.playbackTime += time.time() - VideoState.saveTime # will be inaccurate if the last client disconnects the wrong way.
 	await notify_pos()
 	await notify_dim()
 
@@ -120,15 +129,14 @@ async def position_updater(websocket, path):
 				await notify_pos()
 
 			elif data['type'] == 'dim':
-				global totalWidth, totalHeight, maxWidth, maxHeight
 				delta_x = data['w'] - windowSizes[websocket][0]
 				delta_y = data['h'] - windowSizes[websocket][1]
-				totalWidth += delta_x
-				totalHeight += delta_y
-				if maxWidth < data['w']:
-					maxWidth = data['w']
-				if maxHeight < data['h']:
-					maxHeight = data['h']
+				Dimensions.totalWidth += delta_x
+				Dimensions.totalHeight += delta_y
+				if Dimensions.maxWidth < data['w']:
+					Dimensions.maxWidth = data['w']
+				if Dimensions.maxHeight < data['h']:
+					Dimensions.maxHeight = data['h']
 				for screen in SCREENS:
 					if offsets[screen][0] < offsets[websocket][0]:
 						offsets[screen][0] -= delta_x
@@ -138,19 +146,36 @@ async def position_updater(websocket, path):
 				await notify_pos()
 
 			elif data['type'] == 'ctrl':
+				data['filetype'] = args.filetype
 				await notify_relay(data)
-				VideoState.playbackTime = data['time']
-				VideoState.saveTime = time.time()
-				if data['action'] == 'pause':
-					VideoState.paused = True
-				else: # data['action'] == 'play'
-					VideoState.paused = False
+				if args.filetype == 'video':
+					VideoState.playbackTime = data['time']
+					VideoState.saveTime = time.time()
+					if data['action'] == 'pause':
+						VideoState.paused = True
+					else: # data['action'] == 'play'
+						VideoState.paused = False
+				if args.filetype == 'pdf':
+					if data['action'] == 'nextpage':
+						PDFState.page += 1
+					elif data['action'] == 'previouspage':
+						PDFState.page -= 1
+					elif data['action'] == 'pagenumberchanged':
+						PDFState.page = int(data['value'])
+				
+				
+				
 			else:
 				logging.error("unsupported event: {}", data)
 
 	finally:
 		await unregister(websocket)
 
+
+parser = argparse.ArgumentParser(description='WebSockets Server')
+parser.add_argument('filetype', metavar='filetype', type=str.lower, choices=['image', 'video', 'pdf'], help='TYpe of File you are viewing: image, video, or pdf.')
+parser.add_argument('--fit', metavar='fit', type=str.lower, choices=['width', 'height', 'page'], default='width', help='Zoom to either fit width, fit height, or fit page.')
+args = parser.parse_args()
 
 start_server = websockets.serve(position_updater, port=6789)
 

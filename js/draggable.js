@@ -1,50 +1,3 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <!-- disable zooming mobile https://stackoverflow.com/a/21245567 -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <link rel="stylesheet" href="css/styles.css" />
-</head>
-
-<body>
-<div id="controls-container">
-  <div id="controls" class="controls" data-state="hidden">
-    <button id="playpause" type="button" data-state="play">Play/Pause</button>
-    <div class="progress">
-      <progress id="progress" value="0" min="0">
-        <span id="progress-bar"></span>
-      </progress>
-    </div>
-    <button id="mute" type="button" data-state="unmute">Mute/Unmute</button>
-    <button id="volinc" type="button" data-state="volup">Vol+</button>
-    <button id="voldec" type="button" data-state="voldown">Vol-</button>
-  </div>
-</div>
-<div id="container" style="width: 100%; height: 100%;">
-  <!--<img id="display" src="4k.jpg" alt="Image Not Loaded">-->
-  <video id="display" muted>
-  <source src="video.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-  </video>
-</div>
-
-<script src="js/video-player.js"></script>
-
-<script>
-var cc = document.getElementById('controls-container')
-var controls = document.getElementById('controls')
-controls.style.opacity = 0;
-cc.onmouseenter = function(event){
-  controls.style.pointerEvents = 'auto';
-  controls.style.opacity = 1;
-}
-cc.onmouseleave = function(event){
-  if (cc.offsetHeight >= document.getElementById('container').offsetTop){
-    controls.style.pointerEvents = 'none';
-    controls.style.opacity = 0;
-  }
-}
-
 // https://stackoverflow.com/a/11409944
 Number.prototype.clamp = function(min, max) {
   return Math.min(Math.max(this, min), max);
@@ -57,10 +10,12 @@ dragElement(div);
 
 var video = document.getElementById('display');
 
+var cc = document.getElementById('controlsContainer')
+
 if (!window.location.hostname)
-  websocket = new WebSocket("ws://localhost:6789/");
+  websocket = new WebSocket("ws://localhost:" + WEBSOCKETS_PORT);
 else
-  websocket = new WebSocket("ws://" + window.location.hostname + ":6789/");
+  websocket = new WebSocket("ws://" + window.location.hostname + ":" + WEBSOCKETS_PORT);
 
 function sendDim(event) {
   var width = Math.min(window.innerWidth, window.outerWidth); // android 4.4 chrome where outerWidth is correct and innerWidth too big
@@ -82,15 +37,25 @@ websocket.onmessage = function(event) {
     case 'dim':
       div.style.width = data.w;
       div.style.height = data.h;
+      div.dispatchEvent(new CustomEvent('resize'));
       break;
     case 'ctrl':
-      video.currentTime = data.time;
-      switch (data.action){
-        case 'pause':
-          video.pause();
+      // VIDEO
+      switch (data.filetype) {
+        case 'video':
+          video.currentTime = data.time;
+          switch (data.action){
+            case 'pause':
+              video.pause();
+              break;
+            case 'play':
+              video.play();
+              break;
+            }
           break;
-        case 'play':
-          video.play();
+        case 'pdf':
+          //data.source = 'ws';
+          eventBus.dispatch(data.action, data);
           break;
       }
       break;
@@ -173,8 +138,3 @@ function dragElement(elmnt) { // elmnt is div, elmnt.children[0] is img
   */
   
 }
-</script>
-
-</body>
-</html>
-
