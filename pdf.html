@@ -71,10 +71,6 @@
       <button id="scrollWrapped" class="secondaryToolbarButton scrollModeButtons scrollWrapped" title="Use Wrapped Scrolling" tabindex="64">
         <span>Wrapped Scrolling</span>
       </button>
-      <!-- $FB: bookflip button -->
-      <button id="bookFlip" class="secondaryToolbarButton scrollModeButtons bookFlip toggled" title="Use Book Flip" tabindex="65">
-        <span>Book Flip</span>
-      </button>
 
       <div class="horizontalToolbarSeparator scrollModeButtons"></div>
 
@@ -229,12 +225,12 @@
       loadingTask.promise.then(renderPages);
     }
   }
-  var renderedScale = 0;
+  var oldScale = 0;
   function renderPage(page) {
-    if (rendering == true) {
+    /*if (rendering == true) {
       console.log('???');
       return;
-    }
+    }*/
     rendering = true;
 
     var container = document.getElementById('container')
@@ -252,8 +248,8 @@
     else {
       var scale = Math.min(desiredWidth / viewport.width, desiredHeight / viewport.height);
     }
-    if (scale == renderedScale) return endRender();
-    renderedScale = scale;
+    if (scale == oldScale && PDFViewerApplication.renderedPage == page.pageNumber) return endRender();
+    oldScale = scale;
     
     var scaledViewport = page.getViewport({ scale: scale, });
 
