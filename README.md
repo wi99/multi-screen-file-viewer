@@ -17,9 +17,9 @@ Run it only locally, custom port 8080:
 	$ gunicorn3 -k flask_sockets.worker -b :8080 flaskserv:app
 
 ## TO DO:
-- Fix slow websockets
+- Speed up slow websocket / delays in message sending
 - The user to be able to change what is viewed from the web browser, including file upload, file type being viewed, and screens placement.
-- Fix PDF viewer
+- Improve pdf viewer
 
 ## Attributes
 Example PDF: https://commons.wikimedia.org/wiki/File:Lorem_ipsum_in_Ubuntu_20191111.pdf
