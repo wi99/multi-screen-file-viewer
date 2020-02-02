@@ -1,1 +1,0 @@
-const WEBSOCKETS_PORT = 6789;

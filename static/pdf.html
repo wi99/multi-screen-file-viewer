@@ -2,8 +2,8 @@
 <html dir="ltr">
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <link rel="stylesheet" href="css/styles.css" />
-      <link rel="stylesheet" href="css/pdf/viewer.css">
+    <link rel="stylesheet" href="static/css/styles.css" />
+      <link rel="stylesheet" href="static/css/pdf/viewer.css">
 
 </head>
 
@@ -203,14 +203,14 @@
 </div>
 </div>
 
-<script src="js/pdfjs/pdf.js"></script>
-<script src="js/viewer.js"></script>
+<script src="static/js/pdfjs/pdf.js"></script>
+<script src="static/js/viewer.js"></script>
 <script>
   // If absolute URL from the remote server is provided, configure the CORS header on that server.
-  var url = './document.pdf';
+  var url = './static/document.pdf';
 
   // The workerSrc property shall be specified.
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'js/pdfjs/pdf.worker.js';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'static/js/pdfjs/pdf.worker.js';
 
   // Asynchronous download PDF
   var loadingTask = pdfjsLib.getDocument(url);
@@ -297,8 +297,7 @@
     container.dispatchEvent(event);
   }, false)
 </script>
-<script src="js/constants.js"></script>
-<script src="js/draggable.js"></script>
+<script src="static/js/draggable.js"></script>
 
 </body>
 </html>

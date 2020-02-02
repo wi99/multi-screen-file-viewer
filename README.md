@@ -2,21 +2,24 @@
 Displays a single image or video on multiple browser windows, which can be on different devices (mobile or desktop). It is responsive to dragging, window resizing, client connection and disconnection, and video actions (play, pause, jump). Each browser window has the image video embedded on the webpage, but what's displayed on each browser window does not overlap
 
 ## How to Run:
-In Terminal:
+Setting things up:
 
-	$ python3 serv.py
+	$ pip3 install flask-sockets
 
-In the web browser:
-Open index.html,
+Run the webserver:
 
-Or run a webserver:
+	$ gunicorn3 -k flask_sockets.worker -b 0.0.0.0 flaskserv:app
 
-	$ python3 -m http.server 8000
+and open http://[ip address]:8000
 
-and open http://localhost:8000
+Run it only locally, custom port 8080:
 
-But you get better results when files are locally available on each device, so change the websockets address in index.html, download this onto each device, and open index.html.
+	$ gunicorn3 -k flask_sockets.worker -b :8080 flaskserv:app
 
+## TO DO:
+- Fix slow websockets
+- The user to be able to change what is viewed from the web browser, including file upload, file type being viewed, and screens placement.
+- Fix PDF viewer
 
 ## Attributes
 Example PDF: https://commons.wikimedia.org/wiki/File:Lorem_ipsum_in_Ubuntu_20191111.pdf

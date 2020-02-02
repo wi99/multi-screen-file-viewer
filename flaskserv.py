@@ -1,13 +1,10 @@
-import argparse
-import asyncio
-import json
-import logging
-import websockets
-import time
+from flask import Flask
+from flask_sockets import Sockets
+import geventwebsocket
+import asyncio, time, json
 
-logging.basicConfig()
-#import sys
-#logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+app = Flask(__name__)
+sockets = Sockets(app)
 
 POSITION = {"x": 0, "y": 0}
 
@@ -32,6 +29,9 @@ class VideoState:
 class PDFState:
 	page = 1
 
+class args: # TODO: gui this
+	filetype = 'pdf' # 'image', 'pdf', or 'video'
+	fit = 'width' # 'width', 'height', or 'page'
 
 def pos_event(ws):
 	return json.dumps(
@@ -51,23 +51,22 @@ def dim_event():
 def action_event(action):
 	return json.dumps({'type': 'ctrl', 'action': action})
 
+def notify_pos():
+	for screen in SCREENS:
+		screen.send(pos_event(screen))
 
-async def notify_pos():
-	if SCREENS:  # asyncio.wait doesn't accept an empty list
-		await asyncio.wait([screen.send(pos_event(screen)) for screen in SCREENS])
-
-async def notify_dim():
-	if SCREENS:
-		message = dim_event()
-		await asyncio.wait([screen.send(message) for screen in SCREENS])
-
-async def notify_relay(data):
-	if SCREENS:
-		message = json.dumps(data)
-		await asyncio.wait([screen.send(message) for screen in SCREENS])
+def notify_dim():
+	message = dim_event()
+	for s in SCREENS:
+		s.send(message)
 
 
-async def register(websocket):
+def notify_relay(data):
+	message = json.dumps(data)
+	for s in SCREENS:
+		s.send(message)
+
+def register(websocket):
 	SCREENS.add(websocket)
 	# logic for how to arrange the displays
 	if not offsets:
@@ -85,12 +84,12 @@ async def register(websocket):
 		if not VideoState.paused:
 			VideoState.playbackTime += time.time() - VideoState.saveTime
 		action = 'pause' if VideoState.paused else 'play'
-		await websocket.send(json.dumps({"type": "ctrl", "action": action, "time": VideoState.playbackTime}))
+		websocket.send(json.dumps({"type": "ctrl", "action": action, "time": VideoState.playbackTime}))
 	if args.filetype == 'pdf':
-		await websocket.send(json.dumps({'value': str(PDFState.page), 'type': "ctrl", 'action': "pagenumberchanged"}))
+		websocket.send(json.dumps({'value': str(PDFState.page), 'type': "ctrl", 'action': "pagenumberchanged"}))
 
 
-async def unregister(websocket):
+def unregister(websocket):
 	SCREENS.remove(websocket)
 	w,h = windowSizes.pop(websocket, (0,0))
 
@@ -115,22 +114,27 @@ async def unregister(websocket):
 	if args.filetype == 'video':
 		if not VideoState.paused:
 			VideoState.playbackTime += time.time() - VideoState.saveTime # will be inaccurate if the last client disconnects the wrong way.
-	await notify_pos()
-	await notify_dim()
+	notify_pos()
+	notify_dim()
 
-async def position_updater(websocket, path):
-	await register(websocket)
+
+@sockets.route('/sync')
+def sync_socket(ws):
+	register(ws)
+	print(len(SCREENS))
 	try:
-		async for message in websocket:
+		while not ws.closed:
+			message = ws.receive()
+			print(message)
 			data = json.loads(message)
 			if data['type'] == 'pos':
-				POSITION['x'] = data['x'] - offsets[websocket][0]
-				POSITION['y'] = data['y'] - offsets[websocket][1]
-				await notify_pos()
+				POSITION['x'] = data['x'] - offsets[ws][0]
+				POSITION['y'] = data['y'] - offsets[ws][1]
+				notify_pos()
 
 			elif data['type'] == 'dim':
-				delta_x = data['w'] - windowSizes[websocket][0]
-				delta_y = data['h'] - windowSizes[websocket][1]
+				delta_x = data['w'] - windowSizes[ws][0]
+				delta_y = data['h'] - windowSizes[ws][1]
 				Dimensions.totalWidth += delta_x
 				Dimensions.totalHeight += delta_y
 				if Dimensions.maxWidth < data['w']:
@@ -138,16 +142,16 @@ async def position_updater(websocket, path):
 				if Dimensions.maxHeight < data['h']:
 					Dimensions.maxHeight = data['h']
 				for screen in SCREENS:
-					if offsets[screen][0] < offsets[websocket][0]:
+					if offsets[screen][0] < offsets[ws][0]:
 						offsets[screen][0] -= delta_x
-				windowSizes[websocket] = (data['w'], data['h'])
-				logging.info("window size: %sx%s",  data['w'], data['h'])
-				await notify_dim()
-				await notify_pos()
+				windowSizes[ws] = (data['w'], data['h'])
+				print("window size: " + str(data['w']) + "x" + str(data['h']))
+				notify_dim()
+				notify_pos()
 
 			elif data['type'] == 'ctrl':
 				data['filetype'] = args.filetype
-				await notify_relay(data)
+				notify_relay(data)
 				if args.filetype == 'video':
 					VideoState.playbackTime = data['time']
 					VideoState.saveTime = time.time()
@@ -162,22 +166,24 @@ async def position_updater(websocket, path):
 						PDFState.page -= 1
 					elif data['action'] == 'pagenumberchanged':
 						PDFState.page = int(data['value'])
-				
-				
-				
-			else:
-				logging.error("unsupported event: {}", data)
-
+	except geventwebsocket.exceptions.WebSocketError:
+		print('client disconnected')
+		pass
 	finally:
-		await unregister(websocket)
+		unregister(ws)
 
+@app.route('/')
+def index():
+	print(args.filetype)
+	if args.filetype == 'image':
+		return app.send_static_file('image.html')
+	if args.filetype == 'pdf':
+		return app.send_static_file('pdf.html')
+	# if args.filetype == 'video':
+	return app.send_static_file('video.html')
 
-parser = argparse.ArgumentParser(description='WebSockets Server')
-parser.add_argument('filetype', metavar='filetype', type=str.lower, choices=['image', 'video', 'pdf'], help='TYpe of File you are viewing: image, video, or pdf.')
-parser.add_argument('--fit', metavar='fit', type=str.lower, choices=['width', 'height', 'page'], default='width', help='Zoom to either fit width, fit height, or fit page.')
-args = parser.parse_args()
-
-start_server = websockets.serve(position_updater, port=6789)
-
-asyncio.get_event_loop().run_until_complete(start_server)
-asyncio.get_event_loop().run_forever()
+if __name__ == "__main__":
+	from gevent import pywsgi
+	from geventwebsocket.handler import WebSocketHandler
+	server = pywsgi.WSGIServer(('', 5000), app, handler_class=WebSocketHandler)
+	server.serve_forever()

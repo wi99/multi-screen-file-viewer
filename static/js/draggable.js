@@ -12,10 +12,10 @@ var video = document.getElementById('display');
 
 var cc = document.getElementById('controlsContainer')
 
-if (!window.location.hostname)
-  websocket = new WebSocket("ws://localhost:" + WEBSOCKETS_PORT);
+if (!window.location.host)
+  websocket = new WebSocket("ws://localhost:8000/sync");
 else
-  websocket = new WebSocket("ws://" + window.location.hostname + ":" + WEBSOCKETS_PORT);
+  websocket = new WebSocket("ws://" + window.location.host + '/sync');
 
 function sendDim(event) {
   var width = Math.min(window.innerWidth, window.outerWidth); // android 4.4 chrome where outerWidth is correct and innerWidth too big
