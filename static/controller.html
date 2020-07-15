@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+<meta charset="UTF-8">
+
+<style type="text/css">
+	html, body { height: 100%; width: 100%; margin: 0; }
+	h4 {font-family: sans-serif;}
+	h3 {font-family: sans-serif;}
+	p {font-family: sans-serif;}
+	a {font-family: sans-serif; color:#d15423; text-decoration:none;}
+	table.center {margin-left: auto; margin-right: auto}
+</style>
+
+<title>Controller</title>
+
+<script src="static/js/Modernizr/modernizr-2.0.6.js"></script>
+
+<script src = "static/js/rectangleworld/display/SimpleSquareParticle.js"></script>
+
+<script type="text/javascript">
+
+//JavaScript HTML5 Canvas example by Dan Gries, rectangleworld.com.
+//The basic setup here, including the debugging code and window load listener, is copied from 'HTML5 Canvas' by Fulton & Fulton.
+//Checking for browser compatibility is accomplished with the Modernizr JavaScript library.
+//The latest version of the library is available at www.modernizr.com.
+
+window.addEventListener("load", windowLoadHandler, false);
+
+//For debug messages
+var Debugger = function() { };
+Debugger.log = function(message) {
+	try {
+		console.log(message);
+	}
+	catch (exception) {
+		return;
+	}
+}
+
+var app;
+function windowLoadHandler() {
+	app = new canvasApp();
+}
+
+function canvasSupport() {
+	return Modernizr.canvas;
+}
+
+function canvasApp() {
+	if (!canvasSupport()) {
+		return;
+	}
+	
+	var theCanvas = document.getElementById("canvasOne");
+	var context = theCanvas.getContext("2d");
+	
+	init();
+	
+	var shapes;
+	var dragIndex;
+	var dragging;
+	var mouseX;
+	var mouseY;
+	var dragHoldX;
+	var dragHoldY;
+	var timer;
+	var targetX;
+	var targetY;
+	var easeAmount;
+	
+	const scale = 10; // some number to scale from actual pixel coordinates to canvas pixel coordinates
+	
+	
+	function init() {
+		easeAmount = 0.45;
+		
+		shapes = [];
+
+		drawScreen();
+		
+		theCanvas.addEventListener("mousedown", mouseDownListener, false);
+	}
+	
+	function makeShape(x, y, width, height){
+		//we set a randomized color, including a random alpha (transparency) value.
+		//The color is set using the rgba() method.
+		tempR = Math.floor(Math.random()*255);
+		tempG = Math.floor(Math.random()*255);
+		tempB = Math.floor(Math.random()*255);
+		tempA = 0.3 + 0.5*Math.random();
+		tempColor = "rgba(" + tempR + "," + tempG + "," + tempB + "," + tempA + ")"; // TODO: don't let rectangle be white
+		
+		var tempShape = new SimpleSquareParticle(x/scale, y/scale);
+		tempShape.color = tempColor;
+		tempShape.width = width/scale;
+		tempShape.height = height/scale;
+
+		shapes.push(tempShape);
+		shapes.slice(-1)[0].drawToContext(context);
+	}
+
+	function updateShape(index, x, y, width, height){
+		var shape = shapes[index];
+
+		shape.x = x/scale
+		shape.y = y/scale
+		shape.width = width/scale;
+		shape.height = height/scale;
+
+		//shape.drawToContext(context);
+		// Not sure if I can undraw a single shape, so I'll just use drawScreen
+		drawScreen();
+	}
+
+	this.upmakeShape = function(index, x, y, width, height){ // update or make shape
+		if (index == shapes.length) makeShape(x, y, width, height)
+		else if (index > shapes.length) throw "index too high"
+		updateShape(index, x, y, width, height)
+	}
+	
+	this.removeShape = function(index){
+		updateShape(index, 0,0, 0,0)
+		shapes.splice(index)
+		drawScreen()
+	}
+	
+	function mouseDownListener(evt) {
+		evt.preventDefault();
+		var i;
+		
+		//getting mouse position correctly 
+		var bRect = theCanvas.getBoundingClientRect();
+		mouseX = (evt.clientX - bRect.left)*(theCanvas.width/bRect.width);
+		mouseY = (evt.clientY - bRect.top)*(theCanvas.height/bRect.height);
+
+		for (i=0; i < shapes.length; i++) {
+			if (shapes[i].hitTest(mouseX, mouseY)) {	
+				dragging = true;
+				//the following variable will be reset if this loop repeats with another successful hit:
+				dragIndex = i;
+			}
+		}
+		
+		document.getElementById('screenRes').innerHTML = shapes[dragIndex].width*scale + 'x' + shapes[dragIndex].height*scale
+		document.getElementById('screenColor').style['background-color'] = shapes[dragIndex].color
+		document.getElementById('transform').xpos.value = shapes[dragIndex].x*scale
+		document.getElementById('transform').ypos.value = shapes[dragIndex].y*scale
+		
+		if (dragging) {
+			window.addEventListener("mousemove", mouseMoveListener, false);
+			
+			//shapeto drag is now last one in array
+			dragHoldX = mouseX - shapes[dragIndex].x;
+			dragHoldY = mouseY - shapes[dragIndex].y;
+			
+			//The "target" position is where the object should be if it were to move there instantaneously. But we will
+			//set up the code so that this target position is approached gradually, producing a smooth motion.
+			targetX = mouseX - dragHoldX;
+			targetY = mouseY - dragHoldY;
+			
+			//start timer
+			timer = setInterval(onTimerTick, 1000/30);
+		}
+		theCanvas.removeEventListener("mousedown", mouseDownListener, false);
+		window.addEventListener("mouseup", mouseUpListener, false);
+	}
+	
+	function onTimerTick() {
+		//because of reordering, the dragging shape is the last one in the array.
+		shapes[dragIndex].x = shapes[dragIndex].x + easeAmount*(targetX - shapes[dragIndex].x);
+		shapes[dragIndex].y = shapes[dragIndex].y + easeAmount*(targetY - shapes[dragIndex].y);
+
+		//stop the timer when the target position is reached (close enough)
+		if (!dragging&&(Math.abs(shapes[dragIndex].x - targetX) < 0.1) && (Math.abs(shapes[dragIndex].y - targetY) < 0.1)) {
+			shapes[dragIndex].x = targetX;
+			shapes[dragIndex].y = targetY;
+			
+			clearInterval(timer);
+		}
+		
+		drawScreen();
+	}
+	
+	function mouseUpListener(evt) {
+		theCanvas.addEventListener("mousedown", mouseDownListener, false);
+		window.removeEventListener("mouseup", mouseUpListener, false);
+		if (dragging) {
+			dragging = false;
+			window.removeEventListener("mousemove", mouseMoveListener, false);
+		}
+	}
+
+	function mouseMoveListener(evt) {
+		var posX;
+		var posY;
+		var minX = 0;
+		var maxX = theCanvas.width - shapes[dragIndex].width;
+		var minY = 0;
+		var maxY = theCanvas.height - shapes[dragIndex].height;
+		
+		//getting mouse position correctly 
+		var bRect = theCanvas.getBoundingClientRect();
+		mouseX = (evt.clientX - bRect.left)*(theCanvas.width/bRect.width);
+		mouseY = (evt.clientY - bRect.top)*(theCanvas.height/bRect.height);
+		
+		//clamp x and y positions to prevent object from dragging outside of canvas
+		posX = mouseX - dragHoldX;
+		posX = (posX < minX) ? minX : ((posX > maxX) ? maxX : posX);
+		posY = mouseY - dragHoldY;
+		posY = (posY < minY) ? minY : ((posY > maxY) ? maxY : posY);
+		
+		targetX = posX;
+		targetY = posY;
+		
+		// for some reason the canvas having the border affects whether there's decimals or not on the X and Y values
+		document.getElementById('transform').xpos.value = targetX*scale
+		document.getElementById('transform').ypos.value = targetY*scale
+		
+		websocket.send(JSON.stringify({type: 'pos', index: dragIndex, x: -Math.round(targetX*scale), y: -Math.round(targetY*scale)}));
+	}
+		
+	function drawShapes() {
+		for (var i=0; i < shapes.length; i++) {
+			shapes[i].drawToContext(context);
+		}
+	}
+	
+	function drawScreen() {
+		//bg
+		context.fillStyle = "white";
+		context.fillRect(0,0,theCanvas.width,theCanvas.height);
+		
+		drawShapes();
+	}
+	
+	this.updatePos = function(event){ // oops should rename or split up function, does both sending position and updating canvas
+		event.preventDefault();
+		
+		var x = parseInt(document.getElementById('transform').xpos.value)/scale
+		var y = parseInt(document.getElementById('transform').ypos.value)/scale
+		
+		targetX = x;
+		targetY = y;
+		
+		websocket.send(JSON.stringify({type: 'pos', index: dragIndex, x: -Math.round(targetX*scale), y: -Math.round(targetY*scale)}));
+		
+		timer = setInterval(onTimerTick, 1000/30);
+		
+		return false;
+	}
+	
+	
+}
+
+</script>
+
+<script>
+
+var websocket;
+if (!window.location.host)
+  websocket = new WebSocket("ws://localhost:8000/ctrller");
+else
+  websocket = new WebSocket("ws://" + window.location.host + '/ctrller');
+
+websocket.onclose = function(event){
+  alert('Disconnected. Reason: ' + event.reason)
+  console.log(event.code)
+  console.log(event.isClean)
+}
+
+websocket.onmessage = function(event) {
+  data = JSON.parse(event.data);
+  switch (data.type) {
+    case 'pos':
+      app.upmakeShape(parseInt(data['i']), -parseInt(data['x']), -parseInt(data['y']), parseInt(data['w']), parseInt(data['h']))
+      break;
+    case 'del':
+      app.removeShape(parseInt(data['i']))
+      break;
+    default:
+      console.error("unsupported event", data);
+  }
+};
+
+</script>
+
+</head>
+<body>
+<div style="text-align:center; width: 50%; float: left">
+<h3>Screen Placement Adjuster</h3>
+<p>Drag the rectangles which correspond to connected screens</p>
+<canvas id="canvasOne" width="500" height="300" style="border:1px solid #000000">
+Your browser does not support HTML5 canvas.
+</canvas>
+</div>
+ <!-- TODO: have right part conditionally appear under left part-->
+<div style="text-align:center; width: 50%; float: right;">
+<h3>Transform Screen</h3>
+<table class="center">
+<tr>
+  <th><label>Selected Screen:</label></th>
+  <td id="screenColor">&nbsp;</td>
+</tr>
+<tr>
+  <th><label>Resolution:</label></th>
+  <td id="screenRes"></td>
+</tr>
+</table>
+<br><br>
+<form id="transform" onsubmit="return app.updatePos(event)">
+<table class="center">
+<tr>
+  <th><label>Position:</label></th>
+  <td><label for="xpos">X</label></td>
+  <td><input type="text" name="xpos"></td>
+  <td><label for="ypos">Y</label></td>
+  <td><input type="text" id="ypos" name="ypos"></td>
+</tr>
+<tr>
+  <th><label>Rotation:</label></th>
+  <td><label for="xrot">X</label></td>
+  <td><input type="text" name="xrot" disabled></td>
+  <td><label for="yrot">Y</label></td>
+  <td><input type="text" name="yrot" disabled></td>
+</tr>
+<tr>
+  <th><label>Scale:</label></th>
+  <td><label for="xscale">X</label></td>
+  <td><input type="text" name="xscale" disabled></td>
+  <td><label for="yscale">Y</label></td>
+  <td><input type="text" name="yscale" disabled></td>
+</tr>
+</table>
+  <input type="submit" value="Apply"> <!--TODO: have form be disabled until a rectangle is clicked on.-->
+</form>
+</div>
+<div style="text-align:center; width: 50%; float: right;">
+<br><br>
+<h3>File Viewer Settings</h3>
+<form method="post">
+  <strong>Add New Screens to:</strong>
+  <input type="radio" name="addnewto" value="width">
+  <label for="width">Width</label>
+  <input type="radio" name="addnewto" value="height">
+  <label for="height">Height</label>
+  <br>
+  <strong>File Type:</strong>
+  <input type="radio" name="filetype" value="image">
+  <label for="image">Image</label>
+  <input type="radio" name="filetype" value="pdf">
+  <label for="pdf">PDF</label>
+  <input type="radio" name="filetype" value="video">
+  <label for="video">Video</label>
+  <br>
+  <input type="submit" value="Apply">
+</form>
+</div>
+</body>
+</html>

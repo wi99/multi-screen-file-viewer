@@ -1,15 +1,16 @@
 from flask import Flask
 from flask_sockets import Sockets
+from flask import request
 import geventwebsocket
 import asyncio, time, json
+import logging
 
 app = Flask(__name__)
 sockets = Sockets(app)
 
+currentController = None # only 1 controller client at a time
+SCREENS = [] # aka connected clients
 POSITION = {"x": 0, "y": 0}
-
-SCREENS = set() # aka connected
-
 windowSizes = {} # key: websocket, value: (l,w)
 offsets = {} # key: websocket, value: x,y. values are 0 or negative
 
@@ -29,9 +30,10 @@ class VideoState:
 class PDFState:
 	page = 1
 
-class args: # TODO: gui this
+class args:
 	filetype = 'pdf' # 'image', 'pdf', or 'video'
-	fit = 'width' # 'width', 'height', or 'page'
+	fit = 'width' # 'width', 'height', or 'page' # default placement to 0,0 option is another possibility
+	# TODO: seperate default placement and default zoom variables, because fit does both. defaultZoomFit, defaultAddScreen
 
 def pos_event(ws):
 	return json.dumps(
@@ -59,7 +61,9 @@ def notify_dim():
 	message = dim_event()
 	for s in SCREENS:
 		s.send(message)
-
+	
+		if currentController:
+			currentController.send(json.dumps({'type': 'pos', 'i': SCREENS.index(s), 'x': offsets[s][0], 'y': offsets[s][1], 'w': windowSizes[s][0], 'h': windowSizes[s][1]}))
 
 def notify_relay(data):
 	message = json.dumps(data)
@@ -67,7 +71,7 @@ def notify_relay(data):
 		s.send(message)
 
 def register(websocket):
-	SCREENS.add(websocket)
+	SCREENS.append(websocket)
 	# logic for how to arrange the displays
 	if not offsets:
 		offsets[websocket] = [0,0]
@@ -76,6 +80,7 @@ def register(websocket):
 			offsets[websocket] = [-Dimensions.totalWidth, 0]
 		else:
 			offsets[websocket] = [0, -Dimensions.totalHeight]
+	# TODO: Dimensions.totalWidth no longer a useful variable, doesn't work when screens are moved around.
 
 
 	windowSizes[websocket] = (0,0)
@@ -90,6 +95,9 @@ def register(websocket):
 
 
 def unregister(websocket):
+	if currentController:
+		currentController.send(json.dumps({'type': 'del', 'i': SCREENS.index(websocket)}))
+
 	SCREENS.remove(websocket)
 	w,h = windowSizes.pop(websocket, (0,0))
 
@@ -114,6 +122,7 @@ def unregister(websocket):
 	if args.filetype == 'video':
 		if not VideoState.paused:
 			VideoState.playbackTime += time.time() - VideoState.saveTime # will be inaccurate if the last client disconnects the wrong way.
+	
 	notify_pos()
 	notify_dim()
 
@@ -121,11 +130,15 @@ def unregister(websocket):
 @sockets.route('/sync')
 def sync_socket(ws):
 	register(ws)
-	print(len(SCREENS))
+
+	app.logger.info(str(len(SCREENS)) + ' connected screens');
 	try:
 		while not ws.closed:
 			message = ws.receive()
-			print(message)
+			if not message:
+				app.logger.warning('message is None')
+				break
+			app.logger.debug('screen message: ' + message)
 			data = json.loads(message)
 			if data['type'] == 'pos':
 				POSITION['x'] = data['x'] - offsets[ws][0]
@@ -145,7 +158,7 @@ def sync_socket(ws):
 					if offsets[screen][0] < offsets[ws][0]:
 						offsets[screen][0] -= delta_x
 				windowSizes[ws] = (data['w'], data['h'])
-				print("window size: " + str(data['w']) + "x" + str(data['h']))
+				app.logger.debug("window size: " + str(data['w']) + "x" + str(data['h'])) # I got window size: 0x0 one time, so I should handle this
 				notify_dim()
 				notify_pos()
 
@@ -167,14 +180,13 @@ def sync_socket(ws):
 					elif data['action'] == 'pagenumberchanged':
 						PDFState.page = int(data['value'])
 	except geventwebsocket.exceptions.WebSocketError:
-		print('client disconnected')
+		app.logger.error('client (screen) disconnected - WebSocketError')
 		pass
 	finally:
 		unregister(ws)
 
-@app.route('/')
+@app.route('/', methods=['GET'])
 def index():
-	print(args.filetype)
 	if args.filetype == 'image':
 		return app.send_static_file('image.html')
 	if args.filetype == 'pdf':
@@ -182,7 +194,79 @@ def index():
 	# if args.filetype == 'video':
 	return app.send_static_file('video.html')
 
+allowedFits = ('width', 'height')
+allowedFiletypes = ('image', 'pdf', 'video')
+
+@app.route('/controller', methods=['GET', 'POST'])
+def controller():
+	if request.method == 'GET':
+		return app.send_static_file('controller.html')
+	else: # request.method == 'POST'
+		filetypeChange = False
+		if 'addnewto' in request.form and request.form['addnewto'] in allowedFits:
+			args.fit = request.form['addnewto']
+		if 'filetype' in request.form and request.form['filetype'] in allowedFiletypes:
+			args.filetype = request.form['filetype']
+			# TODO: maybe disconnect all screenClients if filetype has changed
+			filetypeChange = True
+		
+		if filetypeChange:
+			return 'Success. Please reconnect all screens'
+		return 'Success'
+
+def register_controller(ws):
+	global currentController
+	if currentController:
+		currentController.close(1000, b'A new client was connected') # buggy function, 1000 not work
+	currentController = ws
+	
+	i = 0
+	for screen in SCREENS:
+		ws.send(json.dumps({'type': 'pos', 'i': i,
+		                    'x': offsets[screen][0], 'y': offsets[screen][1],
+		                    'w': windowSizes[screen][0], 'h': windowSizes[screen][1]}))
+		i += 1
+
+def unregister_controller(ws):
+	global currentController
+	if ws == currentController:
+		currentController = None
+
+@sockets.route('/ctrller')
+def controller_socket(ws):
+
+	register_controller(ws)
+
+	try:
+		while not ws.closed:
+			message = ws.receive()
+			if not message:
+				break
+			app.logger.debug('controller message: ' + message)
+			data = json.loads(message)
+			try:
+				if data['type'] == 'pos':
+					screen = SCREENS[data['index']]
+					offsets[screen][0] = data['x']
+					offsets[screen][1] = data['y']
+					screen.send(pos_event(screen))
+			except KeyError as e:
+				app.logger.error('controller KeyError: ' + e.args[0])
+				
+	except geventwebsocket.exceptions.WebSocketError:
+		app.logger.error('client (controller) disconnected - WebSocketError')
+		pass
+	finally:
+		unregister_controller(ws)
+
+if __name__ != '__main__':
+	gunicorn_logger = logging.getLogger('gunicorn.error')
+	app.logger.handlers = gunicorn_logger.handlers
+	app.logger.setLevel(gunicorn_logger.level)
+#app.logger.critical('this is a CRITICAL message')
+
 if __name__ == "__main__":
+
 	from gevent import pywsgi
 	from geventwebsocket.handler import WebSocketHandler
 	server = pywsgi.WSGIServer(('', 5000), app, handler_class=WebSocketHandler)
