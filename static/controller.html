@@ -11,6 +11,13 @@
 	p {font-family: sans-serif;}
 	a {font-family: sans-serif; color:#d15423; text-decoration:none;}
 	table.center {margin-left: auto; margin-right: auto}
+	div.rightdown {text-align:center; width: 50%; float: right}
+
+@media screen and (max-width: 970px) {
+  div.rightdown {
+    float: none;
+  }
+}
 </style>
 
 <title>Controller</title>
@@ -296,7 +303,7 @@ Your browser does not support HTML5 canvas.
 </canvas>
 </div>
  <!-- TODO: have right part conditionally appear under left part-->
-<div style="text-align:center; width: 50%; float: right;">
+<div class="rightdown" >
 <h3>Transform Screen</h3>
 <table class="center">
 <tr>
@@ -336,15 +343,25 @@ Your browser does not support HTML5 canvas.
   <input type="submit" value="Apply"> <!--TODO: have form be disabled until a rectangle is clicked on.-->
 </form>
 </div>
-<div style="text-align:center; width: 50%; float: right;">
+<div class="rightdown" >
 <br><br>
 <h3>File Viewer Settings</h3>
 <form method="post">
-  <strong>Add New Screens to:</strong>
-  <input type="radio" name="addnewto" value="width">
+  <strong>Constrain View to:</strong>
+  <input type="radio" name="constrainviewto" value="width">
   <label for="width">Width</label>
-  <input type="radio" name="addnewto" value="height">
+  <input type="radio" name="constrainviewto" value="height">
   <label for="height">Height</label>
+  <input type="radio" name="constrainviewto" value="both">
+  <label for="height">Both</label>
+  <br>
+  <strong>Add New Screens to:</strong>
+  <input type="radio" name="addnewscreensto" value="width">
+  <label for="width">Width</label>
+  <input type="radio" name="addnewscreensto" value="height">
+  <label for="height">Height</label>
+  <input type="radio" name="addnewscreensto" value="origin">
+  <label for="height">Origin</label>
   <br>
   <strong>File Type:</strong>
   <input type="radio" name="filetype" value="image">

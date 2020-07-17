@@ -15,11 +15,8 @@ windowSizes = {} # key: websocket, value: (l,w)
 offsets = {} # key: websocket, value: x,y. values are 0 or negative
 
 class Dimensions:
-	totalWidth = 0
-	totalHeight = 0
-	maxWidth = 0
-	maxHeight = 0
-
+	viewerWidth = 0
+	viewerHeight = 0
 
 # TODO: make these persist after exiting program.
 class VideoState:
@@ -32,7 +29,8 @@ class PDFState:
 
 class args:
 	filetype = 'pdf' # 'image', 'pdf', or 'video'
-	fit = 'width' # 'width', 'height', or 'page' # default placement to 0,0 option is another possibility
+	constrain = 'width' # 'width', 'height', or 'both'
+	addNewScreensTo = 'width' # 'height', 'originn'
 	# TODO: seperate default placement and default zoom variables, because fit does both. defaultZoomFit, defaultAddScreen
 
 def pos_event(ws):
@@ -43,12 +41,12 @@ def pos_event(ws):
 	)
 
 def dim_event():
-	if args.fit == 'width': ## Fit Width
-		return json.dumps({'type': 'dim', 'w': str(Dimensions.totalWidth) + 'px', 'h': 'auto'})
-	elif args.fit == 'height': ## Fit Height
-		return json.dumps({'type': 'dim', 'w': 'auto', 'h': str(Dimensions.totalHeight) + 'px'})
-	else: ## Fit Page
-		return json.dumps({'type': 'dim', 'w': str(Dimensions.totalWidth) + 'px', 'h': str(Dimensions.maxHeight) + 'px'})
+	if args.constrain == 'width':
+		return json.dumps({'type': 'dim', 'w': str(Dimensions.viewerWidth) + 'px', 'h': 'auto'})
+	elif args.constrain == 'height':
+		return json.dumps({'type': 'dim', 'w': 'auto', 'h': str(Dimensions.viewerHeight) + 'px'})
+	else: # args.constrain == 'both'
+		return json.dumps({'type': 'dim', 'w': str(Dimensions.viewerWidth) + 'px', 'h': str(Dimensions.viewerHeight) + 'px'})
 
 def action_event(action):
 	return json.dumps({'type': 'ctrl', 'action': action})
@@ -75,13 +73,13 @@ def register(websocket):
 	# logic for how to arrange the displays
 	if not offsets:
 		offsets[websocket] = [0,0]
-	else: # extending displays to the right for fitwidth and fitpage
-		if args.fit != 'height':
-			offsets[websocket] = [-Dimensions.totalWidth, 0]
-		else:
-			offsets[websocket] = [0, -Dimensions.totalHeight]
-	# TODO: Dimensions.totalWidth no longer a useful variable, doesn't work when screens are moved around.
-
+	else:
+		if args.addNewScreensTo == 'width':
+			offsets[websocket] = [-Dimensions.viewerWidth, 0]
+		elif args.addNewScreensTo == 'height':
+			offsets[websocket] = [0, -Dimensions.viewerHeight]
+		else: # args.addNewScreensTo == 'origin'
+			offsets[websocket] = [0, 0]
 
 	windowSizes[websocket] = (0,0)
 	
@@ -99,10 +97,16 @@ def unregister(websocket):
 		currentController.send(json.dumps({'type': 'del', 'i': SCREENS.index(websocket)}))
 
 	SCREENS.remove(websocket)
-	w,h = windowSizes.pop(websocket, (0,0))
+	
+	# resize viewer
+	if SCREENS:
+		Dimensions.viewerWidth = max({k: -offsets.get(k, 0)[0] + windowSizes.get(k, 0)[0] for k in set(offsets)}.values())
+		Dimensions.viewerHeight = max({k: -offsets.get(k, 0)[1] + windowSizes.get(k, 0)[1] for k in set(offsets)}.values())
+	else:
+		Dimensions.viewerWidth = 0
+		Dimensions.viewerHeight = 0
 
-	Dimensions.totalWidth -= w
-	Dimensions.totalHeight -= h
+	w,h = windowSizes.pop(websocket, (0,0))
 
 	# rearrange displays
 	x,y = offsets.pop(websocket, (0,0))
@@ -114,9 +118,6 @@ def unregister(websocket):
 	if not SCREENS:
 		# general
 		POSITION['x'] = POSITION['y'] = 0 # TODO: if something long like pdf only x goes to zero but y stays the same
-	else:
-		Dimensions.maxWidth = max(windowSizes.values())[0]
-		Dimensions.maxHeight = max(windowSizes.values(), key=lambda x:x[1])[1]
 	
 	# save values
 	if args.filetype == 'video':
@@ -148,17 +149,18 @@ def sync_socket(ws):
 			elif data['type'] == 'dim':
 				delta_x = data['w'] - windowSizes[ws][0]
 				delta_y = data['h'] - windowSizes[ws][1]
-				Dimensions.totalWidth += delta_x
-				Dimensions.totalHeight += delta_y
-				if Dimensions.maxWidth < data['w']:
-					Dimensions.maxWidth = data['w']
-				if Dimensions.maxHeight < data['h']:
-					Dimensions.maxHeight = data['h']
+				# this loop doesn't quite work well with add new screens to origin,
+				# as it pushes a screen too much so that there's a space between two screens,
+				# but I still need it when resize
 				for screen in SCREENS:
 					if offsets[screen][0] < offsets[ws][0]:
 						offsets[screen][0] -= delta_x
 				windowSizes[ws] = (data['w'], data['h'])
-				app.logger.debug("window size: " + str(data['w']) + "x" + str(data['h'])) # I got window size: 0x0 one time, so I should handle this
+				Dimensions.viewerWidth = max({k: -offsets.get(k, 0)[0] + windowSizes.get(k, 0)[0] for k in set(offsets)}.values())
+				Dimensions.viewerHeight = max({k: -offsets.get(k, 0)[1] + windowSizes.get(k, 0)[1] for k in set(offsets)}.values())
+				app.logger.debug("window size: " + str(data['w']) + "x" + str(data['h']))
+				if windowSizes[ws] == (0,0):
+					app.logger.warning("window size is 0x0") # this happened once, I should do something else with it
 				notify_dim()
 				notify_pos()
 
@@ -194,8 +196,9 @@ def index():
 	# if args.filetype == 'video':
 	return app.send_static_file('video.html')
 
-allowedFits = ('width', 'height')
 allowedFiletypes = ('image', 'pdf', 'video')
+allowedConstrains = ('width', 'height', 'both')
+allowedaddNewScreensTos = ('width', 'height', 'origin')
 
 @app.route('/controller', methods=['GET', 'POST'])
 def controller():
@@ -203,21 +206,28 @@ def controller():
 		return app.send_static_file('controller.html')
 	else: # request.method == 'POST'
 		filetypeChange = False
-		if 'addnewto' in request.form and request.form['addnewto'] in allowedFits:
-			args.fit = request.form['addnewto']
-		if 'filetype' in request.form and request.form['filetype'] in allowedFiletypes:
+		change = False
+		if 'constrain' in request.form and request.form['constrain'] in allowedConstrains and args.constrain != request.form['constrain']:
+			args.constrain = request.form['constrain']
+			change = True
+		if 'addnewscreensto' in request.form and request.form['addnewscreensto'] in allowedaddNewScreensTos and args.addNewScreensTo != request.form['addnewscreensto']:
+			args.addNewScreensTo = request.form['addnewscreensto']
+			change = True
+		if 'filetype' in request.form and request.form['filetype'] in allowedFiletypes and args.filetype != request.form['filetype']:
 			args.filetype = request.form['filetype']
 			# TODO: maybe disconnect all screenClients if filetype has changed
 			filetypeChange = True
 		
 		if filetypeChange:
-			return 'Success. Please reconnect all screens'
-		return 'Success'
+			return 'Settings Changed Successfully. Please reconnect all screens'
+		if change:
+			return 'Settings Changed Successfully'
+		return 'No Settings Changed'
 
 def register_controller(ws):
 	global currentController
 	if currentController:
-		currentController.close(1000, b'A new client was connected') # buggy function, 1000 not work
+		currentController.close(1000, b'A new client was connected') # buggy function, I don't get 1000 on the other end
 	currentController = ws
 	
 	i = 0
@@ -250,6 +260,10 @@ def controller_socket(ws):
 					offsets[screen][0] = data['x']
 					offsets[screen][1] = data['y']
 					screen.send(pos_event(screen))
+					Dimensions.viewerWidth = max({k: -offsets.get(k, 0)[0] + windowSizes.get(k, 0)[0] for k in set(offsets)}.values())
+					Dimensions.viewerHeight = max({k: -offsets.get(k, 0)[1] + windowSizes.get(k, 0)[1] for k in set(offsets)}.values())
+					notify_dim()
+
 			except KeyError as e:
 				app.logger.error('controller KeyError: ' + e.args[0])
 				
@@ -266,7 +280,6 @@ if __name__ != '__main__':
 #app.logger.critical('this is a CRITICAL message')
 
 if __name__ == "__main__":
-
 	from gevent import pywsgi
 	from geventwebsocket.handler import WebSocketHandler
 	server = pywsgi.WSGIServer(('', 5000), app, handler_class=WebSocketHandler)
