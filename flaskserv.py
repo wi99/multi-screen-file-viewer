@@ -8,15 +8,17 @@ import logging
 app = Flask(__name__)
 sockets = Sockets(app)
 
-controllerClient = None # only 1 controller client at a time
-screenClients = []
-viewPosition = {"x": 0, "y": 0}
-windowSizes = {} # key: websocket, value: (l,w)
-offsets = {} # key: websocket, value: x,y. values are 0 or negative
+class View:
+	x = 0
+	y = 0
+	width = 0
+	height = 0
 
-class Dimensions:
-	viewerWidth = 0
-	viewerHeight = 0
+	screenClients = []
+	offsets = {} # key: websocket, value: x,y. values are 0 or negative
+	windowSizes = {} # key: websocket, value: (width, height)
+
+controllerClient = None
 
 # TODO: make these persist after exiting program.
 class VideoState:
@@ -35,52 +37,52 @@ class args:
 def pos_event(ws):
 	return json.dumps(
 		{"type": "pos",
-		'x': viewPosition['x'] + offsets[ws][0],
-		'y': viewPosition['y'] + offsets[ws][1]}
+		'x': View.x + View.offsets[ws][0],
+		'y': View.y + View.offsets[ws][1]}
 	)
 
 def dim_event():
 	if args.constrain == 'width':
-		return json.dumps({'type': 'dim', 'w': str(Dimensions.viewerWidth) + 'px', 'h': 'auto'})
+		return json.dumps({'type': 'dim', 'w': str(View.width) + 'px', 'h': 'auto'})
 	elif args.constrain == 'height':
-		return json.dumps({'type': 'dim', 'w': 'auto', 'h': str(Dimensions.viewerHeight) + 'px'})
+		return json.dumps({'type': 'dim', 'w': 'auto', 'h': str(View.height) + 'px'})
 	else: # args.constrain == 'both'
-		return json.dumps({'type': 'dim', 'w': str(Dimensions.viewerWidth) + 'px', 'h': str(Dimensions.viewerHeight) + 'px'})
+		return json.dumps({'type': 'dim', 'w': str(View.width) + 'px', 'h': str(View.height) + 'px'})
 
 def action_event(action):
 	return json.dumps({'type': 'ctrl', 'action': action})
 
 def notify_pos():
-	for screen in screenClients:
+	for screen in View.screenClients:
 		screen.send(pos_event(screen))
 
 def notify_dim():
 	message = dim_event()
-	for s in screenClients:
+	for s in View.screenClients:
 		s.send(message)
 	
 		if controllerClient:
-			controllerClient.send(json.dumps({'type': 'pos', 'i': screenClients.index(s), 'x': offsets[s][0], 'y': offsets[s][1], 'w': windowSizes[s][0], 'h': windowSizes[s][1]}))
+			controllerClient.send(json.dumps({'type': 'pos', 'i': View.screenClients.index(s), 'x': View.offsets[s][0], 'y': View.offsets[s][1], 'w': View.windowSizes[s][0], 'h': View.windowSizes[s][1]}))
 
 def notify_relay(data):
 	message = json.dumps(data)
-	for s in screenClients:
+	for s in View.screenClients:
 		s.send(message)
 
 def register(websocket):
-	screenClients.append(websocket)
+	View.screenClients.append(websocket)
 	# logic for how to arrange the displays
-	if not offsets:
-		offsets[websocket] = [0,0]
+	if not View.offsets:
+		View.offsets[websocket] = [0,0]
 	else:
 		if args.addNewScreensTo == 'width':
-			offsets[websocket] = [-Dimensions.viewerWidth, 0]
+			View.offsets[websocket] = [-View.width, 0]
 		elif args.addNewScreensTo == 'height':
-			offsets[websocket] = [0, -Dimensions.viewerHeight]
+			View.offsets[websocket] = [0, -View.height]
 		else: # args.addNewScreensTo == 'origin'
-			offsets[websocket] = [0, 0]
+			View.offsets[websocket] = [0, 0]
 
-	windowSizes[websocket] = (0,0)
+	View.windowSizes[websocket] = (0,0)
 	
 	if args.filetype == 'video':
 		if not VideoState.paused:
@@ -93,31 +95,31 @@ def register(websocket):
 def unregister(websocket):
 	if controllerClient:
 		# TODO: fix error websocket object not in list when i change filetype
-		controllerClient.send(json.dumps({'type': 'del', 'i': screenClients.index(websocket)}))
+		controllerClient.send(json.dumps({'type': 'del', 'i': View.screenClients.index(websocket)}))
 
 	# remove from dictionaries
-	screenClients.remove(websocket)
-	w,h = windowSizes.pop(websocket, (0,0))
+	View.screenClients.remove(websocket)
+	w,h = View.windowSizes.pop(websocket, (0,0))
 	
 	# rearrange displays
-	x,y = offsets.pop(websocket, (0,0))
-	for screen in screenClients: # affected offsets are those to the right aka more negative
-		if offsets[screen][0] < x:
-			offsets[screen][0] += w
+	x,y = View.offsets.pop(websocket, (0,0))
+	for screen in View.screenClients: # affected offsets are those to the right aka more negative
+		if View.offsets[screen][0] < x:
+			View.offsets[screen][0] += w
 
 	# resize viewer
-	if screenClients:
-		Dimensions.viewerWidth = max({k: -offsets.get(k, 0)[0] + windowSizes.get(k, 0)[0] for k in set(offsets)}.values())
-		Dimensions.viewerHeight = max({k: -offsets.get(k, 0)[1] + windowSizes.get(k, 0)[1] for k in set(offsets)}.values())
+	if View.screenClients:
+		View.width = max({k: -View.offsets.get(k, 0)[0] + View.windowSizes.get(k, 0)[0] for k in set(View.offsets)}.values())
+		View.height = max({k: -View.offsets.get(k, 0)[1] + View.windowSizes.get(k, 0)[1] for k in set(View.offsets)}.values())
 	else:
-		Dimensions.viewerWidth = 0
-		Dimensions.viewerHeight = 0
+		View.width = 0
+		View.height = 0
 
 
 	# reset and revert values
-	if not screenClients:
+	if not View.screenClients:
 		# general
-		viewPosition['x'] = viewPosition['y'] = 0
+		View.x = View.y = 0
 	
 	# save values
 	if args.filetype == 'video':
@@ -136,7 +138,7 @@ def unregister(websocket):
 def sync_socket(ws):
 	register(ws)
 
-	app.logger.info(str(len(screenClients)) + ' connected screens');
+	app.logger.info(str(len(View.screenClients)) + ' connected screens');
 	try:
 		while not ws.closed:
 			message = ws.receive()
@@ -146,25 +148,26 @@ def sync_socket(ws):
 			app.logger.debug('screen message: ' + message)
 			data = json.loads(message)
 			if data['type'] == 'pos':
-				viewPosition['x'] = data['x'] - offsets[ws][0]
-				viewPosition['y'] = data['y'] - offsets[ws][1]
+				View.x = data['x'] - View.offsets[ws][0]
+				View.y = data['y'] - View.offsets[ws][1]
 				notify_pos()
 
 			elif data['type'] == 'dim':
-				delta_x = data['w'] - windowSizes[ws][0]
-				delta_y = data['h'] - windowSizes[ws][1]
+				delta_x = data['w'] - View.windowSizes[ws][0]
+				delta_y = data['h'] - View.windowSizes[ws][1]
 				# TODO: Fix this:
 				# this loop doesn't quite work well with add new screens to origin,
 				# as it pushes a screen too much so that there's a space between two screens,
 				# but I still need it when resize
-				for screen in screenClients:
-					if offsets[screen][0] < offsets[ws][0]:
-						offsets[screen][0] -= delta_x
-				windowSizes[ws] = (data['w'], data['h'])
-				Dimensions.viewerWidth = max({k: -offsets.get(k, 0)[0] + windowSizes.get(k, 0)[0] for k in set(offsets)}.values())
-				Dimensions.viewerHeight = max({k: -offsets.get(k, 0)[1] + windowSizes.get(k, 0)[1] for k in set(offsets)}.values())
+				# same for L shape layout and then you remove a screen on the L where x=0
+				for screen in View.screenClients:
+					if View.offsets[screen][0] < View.offsets[ws][0]:
+						View.offsets[screen][0] -= delta_x
+				View.windowSizes[ws] = (data['w'], data['h'])
+				View.width = max({k: -View.offsets.get(k, 0)[0] + View.windowSizes.get(k, 0)[0] for k in set(View.offsets)}.values())
+				View.height = max({k: -View.offsets.get(k, 0)[1] + View.windowSizes.get(k, 0)[1] for k in set(View.offsets)}.values())
 				app.logger.debug("window size: " + str(data['w']) + "x" + str(data['h']))
-				if windowSizes[ws] == (0,0):
+				if View.windowSizes[ws] == (0,0):
 					app.logger.warning("window size is 0x0") # this happened once, I should do something else with it
 				notify_dim()
 				notify_pos()
@@ -220,7 +223,7 @@ def controller():
 			change = True
 		if 'filetype' in request.form and request.form['filetype'] in allowedFiletypes and args.filetype != request.form['filetype']:
 			args.filetype = request.form['filetype']
-			for screen in screenClients:
+			for screen in View.screenClients:
 				screen.close(1000, b'Filetype in View was Changed')
 			filetypeChange = True
 		
@@ -238,10 +241,10 @@ def register_controller(ws):
 	
 	# TODO: try catch over here in case a client that is not connected but still listed
 	i = 0
-	for screen in screenClients:
+	for screen in View.screenClients:
 		ws.send(json.dumps({'type': 'pos', 'i': i,
-		                    'x': offsets[screen][0], 'y': offsets[screen][1],
-		                    'w': windowSizes[screen][0], 'h': windowSizes[screen][1]}))
+		                    'x': View.offsets[screen][0], 'y': View.offsets[screen][1],
+		                    'w': View.windowSizes[screen][0], 'h': View.windowSizes[screen][1]}))
 		i += 1
 
 def unregister_controller(ws):
@@ -263,12 +266,12 @@ def controller_socket(ws):
 			data = json.loads(message)
 			try:
 				if data['type'] == 'pos':
-					screen = screenClients[data['index']]
-					offsets[screen][0] = data['x']
-					offsets[screen][1] = data['y']
+					screen = View.screenClients[data['index']]
+					View.offsets[screen][0] = data['x']
+					View.offsets[screen][1] = data['y']
 					screen.send(pos_event(screen))
-					Dimensions.viewerWidth = max({k: -offsets.get(k, 0)[0] + windowSizes.get(k, 0)[0] for k in set(offsets)}.values())
-					Dimensions.viewerHeight = max({k: -offsets.get(k, 0)[1] + windowSizes.get(k, 0)[1] for k in set(offsets)}.values())
+					View.width = max({k: -View.offsets.get(k, 0)[0] + View.windowSizes.get(k, 0)[0] for k in set(View.offsets)}.values())
+					View.height = max({k: -View.offsets.get(k, 0)[1] + View.windowSizes.get(k, 0)[1] for k in set(View.offsets)}.values())
 					notify_dim()
 
 			except KeyError as e:
