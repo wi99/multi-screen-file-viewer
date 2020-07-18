@@ -8,9 +8,9 @@ import logging
 app = Flask(__name__)
 sockets = Sockets(app)
 
-currentController = None # only 1 controller client at a time
-SCREENS = [] # aka connected clients
-POSITION = {"x": 0, "y": 0}
+controllerClient = None # only 1 controller client at a time
+screenClients = []
+viewPosition = {"x": 0, "y": 0}
 windowSizes = {} # key: websocket, value: (l,w)
 offsets = {} # key: websocket, value: x,y. values are 0 or negative
 
@@ -30,14 +30,13 @@ class PDFState:
 class args:
 	filetype = 'pdf' # 'image', 'pdf', or 'video'
 	constrain = 'width' # 'width', 'height', or 'both'
-	addNewScreensTo = 'width' # 'height', 'originn'
-	# TODO: seperate default placement and default zoom variables, because fit does both. defaultZoomFit, defaultAddScreen
+	addNewScreensTo = 'width' # 'height', 'origin'
 
 def pos_event(ws):
 	return json.dumps(
 		{"type": "pos",
-		'x': POSITION['x'] + offsets[ws][0],
-		'y': POSITION['y'] + offsets[ws][1]}
+		'x': viewPosition['x'] + offsets[ws][0],
+		'y': viewPosition['y'] + offsets[ws][1]}
 	)
 
 def dim_event():
@@ -52,24 +51,24 @@ def action_event(action):
 	return json.dumps({'type': 'ctrl', 'action': action})
 
 def notify_pos():
-	for screen in SCREENS:
+	for screen in screenClients:
 		screen.send(pos_event(screen))
 
 def notify_dim():
 	message = dim_event()
-	for s in SCREENS:
+	for s in screenClients:
 		s.send(message)
 	
-		if currentController:
-			currentController.send(json.dumps({'type': 'pos', 'i': SCREENS.index(s), 'x': offsets[s][0], 'y': offsets[s][1], 'w': windowSizes[s][0], 'h': windowSizes[s][1]}))
+		if controllerClient:
+			controllerClient.send(json.dumps({'type': 'pos', 'i': screenClients.index(s), 'x': offsets[s][0], 'y': offsets[s][1], 'w': windowSizes[s][0], 'h': windowSizes[s][1]}))
 
 def notify_relay(data):
 	message = json.dumps(data)
-	for s in SCREENS:
+	for s in screenClients:
 		s.send(message)
 
 def register(websocket):
-	SCREENS.append(websocket)
+	screenClients.append(websocket)
 	# logic for how to arrange the displays
 	if not offsets:
 		offsets[websocket] = [0,0]
@@ -91,48 +90,53 @@ def register(websocket):
 	if args.filetype == 'pdf':
 		websocket.send(json.dumps({'value': str(PDFState.page), 'type': "ctrl", 'action': "pagenumberchanged"}))
 
-
 def unregister(websocket):
-	if currentController:
-		currentController.send(json.dumps({'type': 'del', 'i': SCREENS.index(websocket)}))
+	if controllerClient:
+		# TODO: fix error websocket object not in list when i change filetype
+		controllerClient.send(json.dumps({'type': 'del', 'i': screenClients.index(websocket)}))
 
-	SCREENS.remove(websocket)
+	# remove from dictionaries
+	screenClients.remove(websocket)
+	w,h = windowSizes.pop(websocket, (0,0))
 	
+	# rearrange displays
+	x,y = offsets.pop(websocket, (0,0))
+	for screen in screenClients: # affected offsets are those to the right aka more negative
+		if offsets[screen][0] < x:
+			offsets[screen][0] += w
+
 	# resize viewer
-	if SCREENS:
+	if screenClients:
 		Dimensions.viewerWidth = max({k: -offsets.get(k, 0)[0] + windowSizes.get(k, 0)[0] for k in set(offsets)}.values())
 		Dimensions.viewerHeight = max({k: -offsets.get(k, 0)[1] + windowSizes.get(k, 0)[1] for k in set(offsets)}.values())
 	else:
 		Dimensions.viewerWidth = 0
 		Dimensions.viewerHeight = 0
 
-	w,h = windowSizes.pop(websocket, (0,0))
-
-	# rearrange displays
-	x,y = offsets.pop(websocket, (0,0))
-	for screen in SCREENS: # affected offsets are those to the right aka more negative
-		if offsets[screen][0] < x:
-			offsets[screen][0] += w
 
 	# reset and revert values
-	if not SCREENS:
+	if not screenClients:
 		# general
-		POSITION['x'] = POSITION['y'] = 0 # TODO: if something long like pdf only x goes to zero but y stays the same
+		viewPosition['x'] = viewPosition['y'] = 0
 	
 	# save values
 	if args.filetype == 'video':
 		if not VideoState.paused:
 			VideoState.playbackTime += time.time() - VideoState.saveTime # will be inaccurate if the last client disconnects the wrong way.
 	
-	notify_pos()
-	notify_dim()
-
+	try:
+		notify_pos()
+		notify_dim()
+	except geventwebsocket.exceptions.WebSocketError:
+		app.logger.error('WebSocketError - Probably tried to send message to client that is already closed')
+	finally:
+		pass
 
 @sockets.route('/sync')
 def sync_socket(ws):
 	register(ws)
 
-	app.logger.info(str(len(SCREENS)) + ' connected screens');
+	app.logger.info(str(len(screenClients)) + ' connected screens');
 	try:
 		while not ws.closed:
 			message = ws.receive()
@@ -142,17 +146,18 @@ def sync_socket(ws):
 			app.logger.debug('screen message: ' + message)
 			data = json.loads(message)
 			if data['type'] == 'pos':
-				POSITION['x'] = data['x'] - offsets[ws][0]
-				POSITION['y'] = data['y'] - offsets[ws][1]
+				viewPosition['x'] = data['x'] - offsets[ws][0]
+				viewPosition['y'] = data['y'] - offsets[ws][1]
 				notify_pos()
 
 			elif data['type'] == 'dim':
 				delta_x = data['w'] - windowSizes[ws][0]
 				delta_y = data['h'] - windowSizes[ws][1]
+				# TODO: Fix this:
 				# this loop doesn't quite work well with add new screens to origin,
 				# as it pushes a screen too much so that there's a space between two screens,
 				# but I still need it when resize
-				for screen in SCREENS:
+				for screen in screenClients:
 					if offsets[screen][0] < offsets[ws][0]:
 						offsets[screen][0] -= delta_x
 				windowSizes[ws] = (data['w'], data['h'])
@@ -183,7 +188,6 @@ def sync_socket(ws):
 						PDFState.page = int(data['value'])
 	except geventwebsocket.exceptions.WebSocketError:
 		app.logger.error('client (screen) disconnected - WebSocketError')
-		pass
 	finally:
 		unregister(ws)
 
@@ -207,15 +211,17 @@ def controller():
 	else: # request.method == 'POST'
 		filetypeChange = False
 		change = False
-		if 'constrain' in request.form and request.form['constrain'] in allowedConstrains and args.constrain != request.form['constrain']:
-			args.constrain = request.form['constrain']
+		if 'constrainviewto' in request.form and request.form['constrainviewto'] in allowedConstrains and args.constrain != request.form['constrainviewto']:
+			args.constrain = request.form['constrainviewto']
 			change = True
+			notify_dim()
 		if 'addnewscreensto' in request.form and request.form['addnewscreensto'] in allowedaddNewScreensTos and args.addNewScreensTo != request.form['addnewscreensto']:
 			args.addNewScreensTo = request.form['addnewscreensto']
 			change = True
 		if 'filetype' in request.form and request.form['filetype'] in allowedFiletypes and args.filetype != request.form['filetype']:
 			args.filetype = request.form['filetype']
-			# TODO: maybe disconnect all screenClients if filetype has changed
+			for screen in screenClients:
+				screen.close(1000, b'Filetype in View was Changed')
 			filetypeChange = True
 		
 		if filetypeChange:
@@ -225,22 +231,23 @@ def controller():
 		return 'No Settings Changed'
 
 def register_controller(ws):
-	global currentController
-	if currentController:
-		currentController.close(1000, b'A new client was connected') # buggy function, I don't get 1000 on the other end
-	currentController = ws
+	global controllerClient
+	if controllerClient:
+		controllerClient.close(1000, b'A new client was connected') # buggy function, I don't get 1000 on the other end
+	controllerClient = ws
 	
+	# TODO: try catch over here in case a client that is not connected but still listed
 	i = 0
-	for screen in SCREENS:
+	for screen in screenClients:
 		ws.send(json.dumps({'type': 'pos', 'i': i,
 		                    'x': offsets[screen][0], 'y': offsets[screen][1],
 		                    'w': windowSizes[screen][0], 'h': windowSizes[screen][1]}))
 		i += 1
 
 def unregister_controller(ws):
-	global currentController
-	if ws == currentController:
-		currentController = None
+	global controllerClient
+	if ws == controllerClient:
+		controllerClient = None
 
 @sockets.route('/ctrller')
 def controller_socket(ws):
@@ -256,7 +263,7 @@ def controller_socket(ws):
 			data = json.loads(message)
 			try:
 				if data['type'] == 'pos':
-					screen = SCREENS[data['index']]
+					screen = screenClients[data['index']]
 					offsets[screen][0] = data['x']
 					offsets[screen][1] = data['y']
 					screen.send(pos_event(screen))
