@@ -268,8 +268,10 @@ function canvasApp() {
 var websocket;
 if (!window.location.host)
   websocket = new WebSocket("ws://localhost:8000/ctrller");
-else
-  websocket = new WebSocket("ws://" + window.location.host + '/ctrller');
+else {
+  var protocol = window.location.protocol == 'https:' ? 'wss:' : 'ws:'
+  websocket = new WebSocket(protocol + "//" + window.location.host + '/ctrller');
+}
 
 websocket.onclose = function(event){
   alert('Disconnected. Reason: ' + event.reason)
@@ -315,7 +317,6 @@ Your browser does not support HTML5 canvas.
   <td id="screenRes"></td>
 </tr>
 </table>
-<br><br>
 <form id="transform" onsubmit="return app.updatePos(event)">
 <table class="center">
 <tr>
@@ -344,7 +345,6 @@ Your browser does not support HTML5 canvas.
 </form>
 </div>
 <div class="rightdown" >
-<br><br>
 <h3>File Viewer Settings</h3>
 <form method="post">
   <strong>Constrain View to:</strong>
@@ -370,6 +370,18 @@ Your browser does not support HTML5 canvas.
   <label for="pdf">PDF</label>
   <input type="radio" name="filetype" value="video">
   <label for="video">Video</label>
+  <br>
+  <strong>Require Authentication:</strong>
+  <input type="radio" name="authrequired" value="yes">
+  <label for="yes">Yes</label>
+  <input type="radio" name="authrequired" value="no">
+  <label for="no">No</label>
+  <br>
+  <strong>Username:</strong>
+  <input type="text" name="username">
+  <br>
+  <strong>Password:</strong>
+  <input type="password" name="password">
   <br>
   <input type="submit" value="Apply">
 </form>

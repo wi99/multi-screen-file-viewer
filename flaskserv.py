@@ -1,8 +1,9 @@
-from flask import Flask
+from flask import Flask, request, make_response
+from functools import wraps
 from flask_sockets import Sockets
-from flask import request
 import geventwebsocket
-import asyncio, time, json
+import asyncio, time
+import json, hashlib
 import logging
 
 app = Flask(__name__)
@@ -15,24 +16,68 @@ class View:
 	height = 0
 
 	screenClients = []
-	offsets = {} # key: websocket, value: x,y. values are 0 or negative
+	offsets = {} # key: websocket, value: [x,y]. values are 0 or negative
 	windowSizes = {} # key: websocket, value: (width, height)
 
 controllerClient = None
 
-# TODO: make these persist after exiting program.
+class Params:
+	def __init__(self, filepath):
+		self.filepath = filepath
+		self._params = {
+			'authRequired': False,
+			'username': 'username',
+			'passwordHash': '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8', # same as hashlib.sha256('password'.encode('utf-8')).hexdigest()
+			'videoCurrentTime': 0,
+			'pdfPage': 1,
+			'filetype': 'pdf',
+			'constrainViewTo': 'width',
+			'addNewScreensTo': 'width'
+		}
+		try:
+			with open(filepath, 'r') as f:
+				data = json.load(f)
+				for key in self._params:
+					if key in data and self._isValid(key, data[key]):
+						self._params[key] = data[key]
+		except FileNotFoundError:
+			app.logger.info(f'No such file {self.filepath}. Will create one when a nondefault param is set.') # This doesn't log(), must be too early in script. print() works fine though
+		except json.decoder.JSONDecodeError as e:
+			app.logger.error(f'Custom Params Failed - {e}')
+
+	def get(self, param):
+		return self._params[param]
+
+	def set(self, param, arg): # returns True if value was changed, False if value did not change, and handles invalid param/arg
+		if param in self._params and self._isValid(param, arg) and self._params[param] != arg:
+			self._params[param] = arg
+			with open(self.filepath, 'w') as f:
+				json.dump(self._params, f)
+			return True
+		return False
+	
+	allowedFiletypes = ('image', 'pdf', 'video')
+	allowedConstrains = ('width', 'height', 'both')
+	allowedaddNewScreensTos = ('width', 'height', 'origin')
+	
+	def _isValid(self, param, arg):
+		if param == 'filetype' and arg not in self.allowedFiletypes:
+			return False
+		elif param == 'constrainViewTo' and arg not in self.allowedConstrains:
+			return False
+		elif param == 'addNewScreensTo' and arg not in self.allowedaddNewScreensTos:
+			return False
+		return True
+
+params = Params('params.json')
+
 class VideoState:
-	saveTime = time.time()
-	playbackTime = 0
+	lastUpdate = time.time()
+	currentTime = params.get('videoCurrentTime')
 	paused = True
 
 class PDFState:
-	page = 1
-
-class args:
-	filetype = 'pdf' # 'image', 'pdf', or 'video'
-	constrain = 'width' # 'width', 'height', or 'both'
-	addNewScreensTo = 'width' # 'height', 'origin'
+	page = params.get('pdfPage')
 
 def pos_event(ws):
 	return json.dumps(
@@ -42,11 +87,11 @@ def pos_event(ws):
 	)
 
 def dim_event():
-	if args.constrain == 'width':
+	if params.get('constrainViewTo') == 'width':
 		return json.dumps({'type': 'dim', 'w': str(View.width) + 'px', 'h': 'auto'})
-	elif args.constrain == 'height':
+	elif params.get('constrainViewTo') == 'height':
 		return json.dumps({'type': 'dim', 'w': 'auto', 'h': str(View.height) + 'px'})
-	else: # args.constrain == 'both'
+	else: # params.get('constrainViewTo') == 'both'
 		return json.dumps({'type': 'dim', 'w': str(View.width) + 'px', 'h': str(View.height) + 'px'})
 
 def action_event(action):
@@ -75,26 +120,26 @@ def register(websocket):
 	if not View.offsets:
 		View.offsets[websocket] = [0,0]
 	else:
-		if args.addNewScreensTo == 'width':
+		if params.get('addNewScreensTo') == 'width':
 			View.offsets[websocket] = [-View.width, 0]
-		elif args.addNewScreensTo == 'height':
+		elif params.get('addNewScreensTo') == 'height':
 			View.offsets[websocket] = [0, -View.height]
-		else: # args.addNewScreensTo == 'origin'
+		else: # params.get('addNewScreensTo') == 'origin'
 			View.offsets[websocket] = [0, 0]
 
 	View.windowSizes[websocket] = (0,0)
 	
-	if args.filetype == 'video':
+	if params.get('filetype') == 'video':
 		if not VideoState.paused:
-			VideoState.playbackTime += time.time() - VideoState.saveTime
+			VideoState.currentTime += time.time() - VideoState.lastUpdate
+			params.set('videoCurrentTime', VideoState.currentTime)
 		action = 'pause' if VideoState.paused else 'play'
-		websocket.send(json.dumps({"type": "ctrl", "action": action, "time": VideoState.playbackTime}))
-	if args.filetype == 'pdf':
-		websocket.send(json.dumps({'value': str(PDFState.page), 'type': "ctrl", 'action': "pagenumberchanged"}))
+		websocket.send(json.dumps({"type": "ctrl", "action": action, "time": VideoState.currentTime}))
+	if params.get('filetype') == 'pdf':
+		websocket.send(json.dumps({'value': str(params.get('pdfPage')), 'type': "ctrl", 'action': "pagenumberchanged"}))
 
 def unregister(websocket):
 	if controllerClient:
-		# TODO: fix error websocket object not in list when i change filetype
 		controllerClient.send(json.dumps({'type': 'del', 'i': View.screenClients.index(websocket)}))
 
 	# remove from dictionaries
@@ -115,16 +160,16 @@ def unregister(websocket):
 		View.width = 0
 		View.height = 0
 
-
 	# reset and revert values
 	if not View.screenClients:
 		# general
 		View.x = View.y = 0
 	
 	# save values
-	if args.filetype == 'video':
+	if params.get('filetype') == 'video':
 		if not VideoState.paused:
-			VideoState.playbackTime += time.time() - VideoState.saveTime # will be inaccurate if the last client disconnects the wrong way.
+			VideoState.currentTime += time.time() - VideoState.lastUpdate # will be inaccurate if the last client disconnects the wrong way.
+			params.set('videoCurrentTime', VideoState.currentTime)
 	
 	try:
 		notify_pos()
@@ -134,7 +179,30 @@ def unregister(websocket):
 	finally:
 		pass
 
+def auth_required(f):
+	@wraps(f)
+	def decorated(*args, **kwargs):
+		if not params.get('authRequired'):
+			return f(*args, **kwargs)
+		auth = request.authorization
+		if auth and auth.username == params.get('username') and hashlib.sha256(auth.password.encode('utf-8')).hexdigest() == params.get('passwordHash'):
+			return f(*args, **kwargs)
+		return make_response('Could not verify your login!', 401, {'WWW-Authenticate': 'Basic realm="Login Required"'})
+
+	return decorated
+
+@app.route('/', methods=['GET'])
+@auth_required
+def index():
+	if params.get('filetype') == 'image':
+		return app.send_static_file('image.html')
+	if params.get('filetype') == 'pdf':
+		return app.send_static_file('pdf.html')
+	# if params.get('filetype') == 'video':
+	return app.send_static_file('video.html')
+
 @sockets.route('/sync')
+@auth_required
 def sync_socket(ws):
 	register(ws)
 
@@ -147,6 +215,7 @@ def sync_socket(ws):
 				break
 			app.logger.debug('screen message: ' + message)
 			data = json.loads(message)
+
 			if data['type'] == 'pos':
 				View.x = data['x'] - View.offsets[ws][0]
 				View.y = data['y'] - View.offsets[ws][1]
@@ -173,61 +242,61 @@ def sync_socket(ws):
 				notify_pos()
 
 			elif data['type'] == 'ctrl':
-				data['filetype'] = args.filetype
+				data['filetype'] = params.get('filetype')
 				notify_relay(data)
-				if args.filetype == 'video':
-					VideoState.playbackTime = data['time']
-					VideoState.saveTime = time.time()
+				if params.get('filetype') == 'video':
+					VideoState.currentTime = data['time']
+					VideoState.lastUpdate = time.time()
+					params.set('videoCurrentTime', VideoState.currentTime)
 					if data['action'] == 'pause':
 						VideoState.paused = True
 					else: # data['action'] == 'play'
 						VideoState.paused = False
-				if args.filetype == 'pdf':
+				if params.get('filetype') == 'pdf':
 					if data['action'] == 'nextpage':
 						PDFState.page += 1
 					elif data['action'] == 'previouspage':
 						PDFState.page -= 1
-					elif data['action'] == 'pagenumberchanged':
+					else: # data['action'] == 'pagenumberchanged':
 						PDFState.page = int(data['value'])
+					params.set('pdfPage', PDFState.page)
+
 	except geventwebsocket.exceptions.WebSocketError:
 		app.logger.error('client (screen) disconnected - WebSocketError')
 	finally:
 		unregister(ws)
 
-@app.route('/', methods=['GET'])
-def index():
-	if args.filetype == 'image':
-		return app.send_static_file('image.html')
-	if args.filetype == 'pdf':
-		return app.send_static_file('pdf.html')
-	# if args.filetype == 'video':
-	return app.send_static_file('video.html')
-
-allowedFiletypes = ('image', 'pdf', 'video')
-allowedConstrains = ('width', 'height', 'both')
-allowedaddNewScreensTos = ('width', 'height', 'origin')
-
 @app.route('/controller', methods=['GET', 'POST'])
+@auth_required
 def controller():
 	if request.method == 'GET':
 		return app.send_static_file('controller.html')
 	else: # request.method == 'POST'
 		filetypeChange = False
 		change = False
-		if 'constrainviewto' in request.form and request.form['constrainviewto'] in allowedConstrains and args.constrain != request.form['constrainviewto']:
-			args.constrain = request.form['constrainviewto']
-			change = True
-			notify_dim()
-		if 'addnewscreensto' in request.form and request.form['addnewscreensto'] in allowedaddNewScreensTos and args.addNewScreensTo != request.form['addnewscreensto']:
-			args.addNewScreensTo = request.form['addnewscreensto']
-			change = True
-		if 'filetype' in request.form and request.form['filetype'] in allowedFiletypes and args.filetype != request.form['filetype']:
-			args.filetype = request.form['filetype']
-			for screen in View.screenClients:
-				screen.close(1000, b'Filetype in View was Changed')
-			filetypeChange = True
-		
-		if filetypeChange:
+		if 'constrainviewto' in request.form:
+			change = params.set('constrainViewTo', request.form['constrainviewto'])
+			if change:
+				notify_dim()
+		if 'addnewscreensto' in request.form:
+			change = params.set('addNewScreensTo', request.form['addnewscreensto']) or change
+		if 'filetype' in request.form:
+			filetypeChange = params.set('filetype', request.form['filetype'])
+			if filetypeChange:
+				for screen in View.screenClients:
+					screen.close(1000, b'Filetype was Changed. Refresh Page.')
+
+		if 'authrequired' in request.form:
+			if request.form['authrequired'] == 'yes':
+				change = params.set('authRequired', True) or change
+			elif request.form['authrequired'] == 'no':
+				change = params.set('authRequired', False) or change
+		if 'username' in request.form:
+			change = params.set('username', request.form['username']) or change
+		if 'password' in request.form:
+			change = params.set('passwordHash', hashlib.sha256(request.form['password'].encode('utf-8')).hexdigest()) or change
+
+		if filetypeChange: # Message with more info takes priority
 			return 'Settings Changed Successfully. Please reconnect all screens'
 		if change:
 			return 'Settings Changed Successfully'
@@ -239,7 +308,7 @@ def register_controller(ws):
 		controllerClient.close(1000, b'A new client was connected') # buggy function, I don't get 1000 on the other end
 	controllerClient = ws
 	
-	# TODO: try catch over here in case a client that is not connected but still listed
+	# try catch over here in case a client is not connected but still listed?
 	i = 0
 	for screen in View.screenClients:
 		ws.send(json.dumps({'type': 'pos', 'i': i,
@@ -253,6 +322,7 @@ def unregister_controller(ws):
 		controllerClient = None
 
 @sockets.route('/ctrller')
+@auth_required
 def controller_socket(ws):
 
 	register_controller(ws)
