@@ -8,19 +8,18 @@ Displays a single image or video on multiple browser windows, which can be on di
 #### Install Dependencies:
 	$ pip3 install flask-sockets
 
-#### [Optional] Generate cert and key for HTTPS:
+#### Generate cert and key for HTTPS:
 	$ openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 365
 
 
 ### Run the webserver:
 
-	$ gunicorn3 -k flask_sockets.worker -b 0.0.0.0:8080 flaskserv:app
+	$ gunicorn3 --certfile cert.pem --keyfile key.pem -k flask_sockets.worker -b 0.0.0.0:8080 flaskserv:app
 
-and on different screens/windows/devices, open `http://[ip address]:8080`
+and on different screens/windows/devices, open `https://[ip address]:8080`. For settings and moving the placement of devices, open `https://[ip address]:8080/controller` - only one client can control at a time.
 
- - For HTTPS, add `--certfile cert.pem --keyfile key.pem`
- - For settings and moving the placement of devices, open `http://[ip address]:8080/controller` - only one client can control at a time.
- - For debug logging, add `--log-level=debug`
+ - For HTTP, remove `--certfile cert.pem --keyfile key.pem`
+ - To display debug logging, add `--log-level=debug`
  - Remove `0.0.0.0` to have it only accessible locally
 
 ## TO DO:
