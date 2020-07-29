@@ -1,11 +1,5 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <link rel="stylesheet" href="static/css/styles.css" />
-</head>
-
-<body>
+{% extends "draggable.html" %}
+{% block content %}
 <div id="controlsContainer">
   <div id="controls" class="controls" data-state="hidden">
     <button id="playpause" type="button" data-state="play">Play/Pause</button>
@@ -21,7 +15,7 @@
 </div>
 <div id="container" style="width: 100%; height: 100%;">
   <video id="display" muted>
-  <source src="static/video.mp4" type="video/mp4">
+  <source src="uploads/{{ filename }}" type="{{ mimetype }}">
   Your browser does not support the video tag.
   </video>
 </div>
@@ -42,9 +36,4 @@ cc.onmouseleave = function(event){
   }
 }
 </script>
-
-<script src="static/js/draggable.js"></script>
-
-</body>
-</html>
-
+{% endblock %}

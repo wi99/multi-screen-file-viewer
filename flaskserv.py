@@ -1,13 +1,20 @@
-from flask import Flask, request, make_response
+from flask import Flask, request, make_response, render_template, send_from_directory
 from functools import wraps
 from flask_sockets import Sockets
 import geventwebsocket
 import asyncio, time
 import json, hashlib
 import logging
+from werkzeug.utils import secure_filename
+import os
+
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_MIMETYPES = {'application/pdf', 'image/', 'video/'}
 
 app = Flask(__name__)
 sockets = Sockets(app)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 * 1024 # Default 5 GB
 
 class View:
 	x = 0
@@ -32,7 +39,12 @@ class Params:
 			'pdfPage': 1,
 			'filetype': 'pdf',
 			'constrainViewTo': 'width',
-			'addNewScreensTo': 'width'
+			'addNewScreensTo': 'width',
+			'imageFilename': '4k.jpg',
+			'videoFilename': 'video.mp4',
+			'videoMimetype': 'video/mp4',
+			'pdfFilename': 'document.pdf',
+			
 		}
 		try:
 			with open(filepath, 'r') as f:
@@ -195,11 +207,11 @@ def auth_required(f):
 @auth_required
 def index():
 	if params.get('filetype') == 'image':
-		return app.send_static_file('image.html')
+		return render_template('image.html', filename=params.get('imageFilename'))
 	if params.get('filetype') == 'pdf':
-		return app.send_static_file('pdf.html')
-	# if params.get('filetype') == 'video':
-	return app.send_static_file('video.html')
+		return render_template('pdf.html', filename=params.get('pdfFilename'))
+	# video
+	return render_template('video.html', filename=params.get('videoFilename'), mimetype=params.get('videoMimetype'))
 
 @sockets.route('/sync')
 @auth_required
@@ -211,7 +223,7 @@ def sync_socket(ws):
 		while not ws.closed:
 			message = ws.receive()
 			if not message:
-				app.logger.warning('message is None')
+				app.logger.warning('message is None') # TODO: Is this normal behavior or fixable?
 				break
 			app.logger.debug('screen message: ' + message)
 			data = json.loads(message)
@@ -266,6 +278,9 @@ def sync_socket(ws):
 	finally:
 		unregister(ws)
 
+def alert(string):
+	return f'<script>alert(\'{string}\')</script>'
+
 @app.route('/controller', methods=['GET', 'POST'])
 @auth_required
 def controller():
@@ -297,10 +312,72 @@ def controller():
 			change = params.set('passwordHash', hashlib.sha256(request.form['password'].encode('utf-8')).hexdigest()) or change
 
 		if filetypeChange: # Message with more info takes priority
-			return 'Settings Changed Successfully. Please reconnect all screens'
+			return alert('Settings Changed Successfully. Please reconnect all screens')
 		if change:
-			return 'Settings Changed Successfully'
-		return 'No Settings Changed'
+			return alert('Settings Changed Successfully')
+		return alert('No Settings Changed')
+
+def allowed_file(mimetype): # Note: this only checks the file extension and doesn't actually read the beginning of the file for the mimetype
+	if mimetype in ALLOWED_MIMETYPES:
+		return True
+	for allowedMimetype in ALLOWED_MIMETYPES:
+		if allowedMimetype.endswith('/') and mimetype.startswith(allowedMimetype):
+			return True
+		#elif allowedMimetype.startswith('/') and mimetype.endswith(allowedMimetype):
+		#	return True
+	return False
+
+@app.route('/upload', methods=['POST'])
+@auth_required
+def upload():
+	if 'file' not in request.files:
+		return alert('No file part')
+	
+	f = request.files['file']
+	
+	if not f.filename:
+		return alert('No selected file')
+	
+	mimetype = f.content_type
+	if not allowed_file(mimetype):
+		return alert('Filetype not allowed')
+	
+	filename = secure_filename(f.filename)
+	
+	# TODO: maybe don't delete file?
+	filenameChanged = False
+	oldFilename = None
+	if mimetype == 'application/pdf':
+		oldFilename = params.get('pdfFilename')
+		filenameChanged = params.set('pdfFilename', filename)
+	elif mimetype.startswith('image/'):
+		oldFilename = params.get('imageFilename')
+		filenameChanged = params.set('imageFilename', filename)
+	elif mimetype.startswith('video/'):
+		oldFilename = params.get('videoFilename')
+		filenameChanged = params.set('videoFilename', filename)
+		params.set('videoMimetype', mimetype)
+	
+	if not os.path.exists('uploads'):
+		os.makedirs('uploads')
+	filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+	f.save(filepath)
+	app.logger.info(f'saved file {filepath}')
+	
+	if filenameChanged:
+		try:
+			oldFilepath = os.path.join(app.config['UPLOAD_FOLDER'], oldFilename)
+			os.remove(oldFilepath)
+			app.logger.info(f'deleted file {oldFilepath}')
+		except FileNotFoundError as e:
+			app.logger.error(e)
+
+	return alert('file uploaded successfully')
+
+@app.route('/uploads/<filename>')
+@auth_required
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 def register_controller(ws):
 	global controllerClient

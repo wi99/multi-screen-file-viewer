@@ -346,7 +346,7 @@ Your browser does not support HTML5 canvas.
 </div>
 <div class="rightdown" >
 <h3>File Viewer Settings</h3>
-<form method="post">
+<form method="post" target="hiddenframe">
   <strong>Constrain View to:</strong>
   <input type="radio" name="constrainviewto" value="width">
   <label for="width">Width</label>
@@ -385,6 +385,12 @@ Your browser does not support HTML5 canvas.
   <br>
   <input type="submit" value="Apply">
 </form>
+<h3>File Upload</h3>
+<form method="post" action="/upload" enctype="multipart/form-data" target="hiddenframe">
+  <input type="file" name="file">
+  <input type="submit" value="Upload">
+</form>
 </div>
+<iframe name="hiddenframe" style="display: none;"></iframe>
 </body>
 </html>

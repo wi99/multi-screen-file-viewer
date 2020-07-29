@@ -207,7 +207,7 @@
 <script src="static/js/viewer.js"></script>
 <script>
   // If absolute URL from the remote server is provided, configure the CORS header on that server.
-  var url = './static/document.pdf';
+  var url = './uploads/{{ filename }}';
 
   // The workerSrc property shall be specified.
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'static/js/pdfjs/pdf.worker.js';
