@@ -20,11 +20,14 @@ else {
 }
 
 function sendDim(event) {
-  var width = Math.min(window.innerWidth, window.outerWidth); // android 4.4 chrome where outerWidth is correct and innerWidth too big
-  var height = Math.min(window.innerHeight, window.outerHeight);
-  websocket.send(JSON.stringify({type: 'dim', w: width, h: height}));
+  setTimeout(function(){
+    var width = Math.min(window.innerWidth, window.outerWidth); // android 4.4 chrome where outerWidth is correct and innerWidth too big
+    var height = Math.min(window.innerHeight, window.outerHeight);
+    websocket.send(JSON.stringify({type: 'dim', w: width, h: height}));
+  }, 0) // setTimeout 0 ms fixes chrome on desktop giving me the wrong values (too early) for fullscreenchange and for f11 full screen
 };
-window.onresize = sendDim;
+window.addEventListener('resize', sendDim);
+document.addEventListener('fullscreenchange', sendDim);
 websocket.onopen = sendDim;
 
 websocket.onmessage = function(event) {

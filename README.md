@@ -27,6 +27,7 @@ and on different screens/windows/devices, open `https://[ip address]:8080`. For 
 - Improve pdf viewer: Only page navigation works currently
 - Improve controller: Screen rotation, scale. Canvas zoom or increase size. Don't change rectangle color of higher indexes on removal of a screen.
 - Improve video player: new screen connect but its progress wasn't moved. mobile bug where you can't choose where you want to watch.
+- Handle bad disconnections e.g. wifi disconnected on a screen (ping and timeout and stuff)
 
 ## Attributes
 Example PDF: https://commons.wikimedia.org/wiki/File:Lorem_ipsum_in_Ubuntu_20191111.pdf
