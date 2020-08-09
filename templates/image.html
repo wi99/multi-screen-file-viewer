@@ -2,13 +2,7 @@
 {% block content %}
 <div id="controlsContainer">
 </div>
-<div id="container" style="width: 100%; height: 100%;">
-  <img id="display" src="uploads/{{ filename }}" alt="Image Not Loaded">
+<div id="container">
+  <img id="display" src="uploads/{{ filename }}" style="width: 100%; height: 100%;">
 </div>
-
-<script>
-  var display = document.getElementById('display');
-  display.style.width = '100%';
-  display.style.height = '100%';
-</script>
 {% endblock %}

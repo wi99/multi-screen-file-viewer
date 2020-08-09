@@ -42,7 +42,6 @@ websocket.onmessage = function(event) {
     case 'dim':
       div.style.width = data.w;
       div.style.height = data.h;
-      div.dispatchEvent(new CustomEvent('resize'));
       break;
     case 'ctrl':
       // VIDEO
