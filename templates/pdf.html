@@ -289,13 +289,6 @@
   
   PDFViewerApplication.page = 1;
   loadingTask.promise.then(renderPages);
-  
-  
-  window.addEventListener('resize', function(elem){
-    var container = document.getElementById('container')
-    var event = new CustomEvent('resize');
-    container.dispatchEvent(event);
-  }, false)
 </script>
   <div id="fullscreenToggle" class="floating-button">
     <p>↖↗<br>↙↘</p>
