@@ -345,7 +345,7 @@ Your browser does not support HTML5 canvas.
 </form>
 </div>
 <div class="rightdown" >
-<h3>File Viewer Settings</h3>
+<h3>Viewer Settings</h3>
 <form method="post" target="hiddenframe">
   <strong>Constrain View to:</strong>
   <input type="radio" name="constrainviewto" value="width">
@@ -353,7 +353,8 @@ Your browser does not support HTML5 canvas.
   <input type="radio" name="constrainviewto" value="height">
   <label for="height">Height</label>
   <input type="radio" name="constrainviewto" value="both">
-  <label for="height">Both</label>
+  <label for="both">Both</label>
+  <!-- TODO: change to checkbox but only after having some hidden input to match a confirmation code so that a wrong submit doesn't lose your saved values -->
   <br>
   <strong>Add New Screens to:</strong>
   <input type="radio" name="addnewscreensto" value="width">
@@ -361,9 +362,19 @@ Your browser does not support HTML5 canvas.
   <input type="radio" name="addnewscreensto" value="height">
   <label for="height">Height</label>
   <input type="radio" name="addnewscreensto" value="origin">
-  <label for="height">Origin</label>
+  <label for="origin">Origin</label>
   <br>
-  <strong>File Type:</strong>
+  <strong title="Rearrange placement of screens when a screen is resized or removed">Rearrange Screens On Change:</strong>
+  <input type="radio" name="rearrangeScreensOnChange" value="width">
+  <label for="width">Width</label>
+  <input type="radio" name="rearrangeScreensOnChange" value="height">
+  <label for="height">Height</label>
+  <input type="radio" name="rearrangeScreensOnChange" value="both">
+  <label for="both">Both</label>
+  <input type="radio" name="rearrangeScreensOnChange" value="none">
+  <label for="none">None</label>
+  <br>
+  <strong title="File type to view">File Type:</strong>
   <input type="radio" name="filetype" value="image">
   <label for="image">Image</label>
   <input type="radio" name="filetype" value="pdf">
@@ -371,7 +382,13 @@ Your browser does not support HTML5 canvas.
   <input type="radio" name="filetype" value="video">
   <label for="video">Video</label>
   <br>
-  <strong>Require Authentication:</strong>
+  <input type="submit" value="Apply">
+</form>
+<h3>Authentication Settings</h3>
+<form method="post" target="hiddenframe">
+  <small>HTTPS recommended if submitting a username/password</small>
+  <br>
+  <strong title="Require username and password for access">Require Authentication:</strong>
   <input type="radio" name="authrequired" value="yes">
   <label for="yes">Yes</label>
   <input type="radio" name="authrequired" value="no">

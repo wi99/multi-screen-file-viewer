@@ -40,6 +40,7 @@ class Params:
 			'filetype': 'pdf',
 			'constrainViewTo': 'width',
 			'addNewScreensTo': 'width',
+			'rearrangeScreensOnChange': 'both',
 			'imageFilename': '4k.jpg',
 			'videoFilename': 'video.mp4',
 			'videoMimetype': 'video/mp4',
@@ -71,6 +72,7 @@ class Params:
 	allowedFiletypes = ('image', 'pdf', 'video')
 	allowedConstrains = ('width', 'height', 'both')
 	allowedaddNewScreensTos = ('width', 'height', 'origin')
+	allowedRearrangeScreensOnChange = ('width', 'height', 'both', 'none')
 	
 	def _isValid(self, param, arg):
 		if param == 'filetype' and arg not in self.allowedFiletypes:
@@ -78,6 +80,8 @@ class Params:
 		elif param == 'constrainViewTo' and arg not in self.allowedConstrains:
 			return False
 		elif param == 'addNewScreensTo' and arg not in self.allowedaddNewScreensTos:
+			return False
+		elif param == 'rearrangeScreensOnChange' and arg not in self.allowedRearrangeScreensOnChange:
 			return False
 		return True
 
@@ -160,9 +164,14 @@ def unregister(websocket):
 	
 	# rearrange displays
 	x,y = View.offsets.pop(websocket, (0,0))
-	for screen in View.screenClients: # affected offsets are those to the right aka more negative
-		if View.offsets[screen][0] < x:
-			View.offsets[screen][0] += w
+	if params.get('rearrangeScreensOnChange') in ['width', 'both']:
+		for screen in View.screenClients:
+			if View.offsets[screen][0] < x:
+				View.offsets[screen][0] += w
+	if params.get('rearrangeScreensOnChange') in ['height', 'both']:
+		for screen in View.screenClients:
+			if View.offsets[screen][1] < x:
+				View.offsets[screen][1] += h
 
 	# resize viewer
 	if View.screenClients:
@@ -236,14 +245,16 @@ def sync_socket(ws):
 			elif data['type'] == 'dim':
 				delta_x = data['w'] - View.windowSizes[ws][0]
 				delta_y = data['h'] - View.windowSizes[ws][1]
-				# TODO: Fix this:
-				# this loop doesn't quite work well with add new screens to origin,
-				# as it pushes a screen too much so that there's a space between two screens,
-				# but I still need it when resize
-				# same for L shape layout and then you remove a screen on the L where x=0
-				for screen in View.screenClients:
-					if View.offsets[screen][0] < View.offsets[ws][0]:
-						View.offsets[screen][0] -= delta_x
+				# rearrange screens
+				if params.get('rearrangeScreensOnChange') in ['width', 'both']:
+					for screen in View.screenClients:
+						if View.offsets[screen][0] < View.offsets[ws][0]:
+							View.offsets[screen][0] -= delta_x
+				if params.get('rearrangeScreensOnChange') in ['height', 'both']:
+					for screen in View.screenClients:
+						if View.offsets[screen][1] < View.offsets[ws][1]:
+							View.offsets[screen][1] -= delta_y
+				
 				View.windowSizes[ws] = (data['w'], data['h'])
 				View.width = max({k: -View.offsets.get(k, 0)[0] + View.windowSizes.get(k, 0)[0] for k in set(View.offsets)}.values())
 				View.height = max({k: -View.offsets.get(k, 0)[1] + View.windowSizes.get(k, 0)[1] for k in set(View.offsets)}.values())
@@ -300,6 +311,8 @@ def controller():
 			if filetypeChange:
 				for screen in View.screenClients:
 					screen.close(1000, b'Filetype was Changed. Refresh Page.')
+		if 'rearrangeScreensOnChange' in request.form:
+			change = params.set('rearrangeScreensOnChange', request.form['rearrangeScreensOnChange'])
 
 		if 'authrequired' in request.form:
 			if request.form['authrequired'] == 'yes':
