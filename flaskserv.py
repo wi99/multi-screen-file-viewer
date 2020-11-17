@@ -123,7 +123,7 @@ def notify_dim():
 		s.send(message)
 	
 		if controllerClient:
-			controllerClient.send(json.dumps({'type': 'pos', 'i': View.screenClients.index(s), 'x': View.offsets[s][0], 'y': View.offsets[s][1], 'w': View.windowSizes[s][0], 'h': View.windowSizes[s][1]}))
+			controllerClient.send(json.dumps({'type': 'screenpos', 'i': View.screenClients.index(s), 'x': View.offsets[s][0], 'y': View.offsets[s][1], 'w': View.windowSizes[s][0], 'h': View.windowSizes[s][1]}))
 
 def notify_relay(data):
 	message = json.dumps(data)
@@ -401,7 +401,7 @@ def register_controller(ws):
 	# try catch over here in case a client is not connected but still listed?
 	i = 0
 	for screen in View.screenClients:
-		ws.send(json.dumps({'type': 'pos', 'i': i,
+		ws.send(json.dumps({'type': 'screenpos', 'i': i,
 		                    'x': View.offsets[screen][0], 'y': View.offsets[screen][1],
 		                    'w': View.windowSizes[screen][0], 'h': View.windowSizes[screen][1]}))
 		i += 1
@@ -425,7 +425,7 @@ def controller_socket(ws):
 			app.logger.debug('controller message: ' + message)
 			data = json.loads(message)
 			try:
-				if data['type'] == 'pos':
+				if data['type'] == 'screenpos':
 					screen = View.screenClients[data['index']]
 					View.offsets[screen][0] = data['x']
 					View.offsets[screen][1] = data['y']
@@ -433,6 +433,10 @@ def controller_socket(ws):
 					View.width = max({k: -View.offsets.get(k, 0)[0] + View.windowSizes.get(k, 0)[0] for k in set(View.offsets)}.values())
 					View.height = max({k: -View.offsets.get(k, 0)[1] + View.windowSizes.get(k, 0)[1] for k in set(View.offsets)}.values())
 					notify_dim()
+				elif data['type'] == 'containerpos':
+					View.x = data['x']
+					View.y = data['y']
+					notify_pos()
 
 			except KeyError as e:
 				app.logger.error('controller KeyError: ' + e.args[0])

@@ -225,7 +225,7 @@ function canvasApp() {
 		document.getElementById('transform').xpos.value = targetX*scale
 		document.getElementById('transform').ypos.value = targetY*scale
 		
-		websocket.send(JSON.stringify({type: 'pos', index: dragIndex, x: -Math.round(targetX*scale), y: -Math.round(targetY*scale)}));
+		websocket.send(JSON.stringify({type: 'screenpos', index: dragIndex, x: -Math.round(targetX*scale), y: -Math.round(targetY*scale)}));
 	}
 		
 	function drawShapes() {
@@ -251,7 +251,7 @@ function canvasApp() {
 		targetX = x;
 		targetY = y;
 		
-		websocket.send(JSON.stringify({type: 'pos', index: dragIndex, x: -Math.round(targetX*scale), y: -Math.round(targetY*scale)}));
+		websocket.send(JSON.stringify({type: 'screenpos', index: dragIndex, x: -Math.round(targetX*scale), y: -Math.round(targetY*scale)}));
 		
 		timer = setInterval(onTimerTick, 1000/30);
 		
@@ -282,7 +282,7 @@ websocket.onclose = function(event){
 websocket.onmessage = function(event) {
   data = JSON.parse(event.data);
   switch (data.type) {
-    case 'pos':
+    case 'screenpos':
       app.upmakeShape(parseInt(data['i']), -parseInt(data['x']), -parseInt(data['y']), parseInt(data['w']), parseInt(data['h']))
       break;
     case 'del':
@@ -295,6 +295,16 @@ websocket.onmessage = function(event) {
 
 </script>
 
+<script>
+
+function setContainerPos(event, x, y){
+  event.preventDefault();
+  websocket.send(JSON.stringify({type: 'containerpos', x: x, y: y}));
+  return false;
+}
+
+</script>
+
 </head>
 <body>
 <div style="text-align:center; width: 50%; float: left">
@@ -303,6 +313,12 @@ websocket.onmessage = function(event) {
 <canvas id="canvasOne" width="500" height="300" style="border:1px solid #000000">
 Your browser does not support HTML5 canvas.
 </canvas>
+<br>
+<h3>Draggable Container</h3>
+<form method="post" action="/container" target="hiddenframe" onsubmit="return setContainerPos(event, 0, 0)">
+  <input type="submit" value="Reset Placement" title="Reset Placement to origin (x=0, y=0)">
+</form>
+<br>
 </div>
  <!-- TODO: have right part conditionally appear under left part-->
 <div class="rightdown" >
@@ -344,7 +360,7 @@ Your browser does not support HTML5 canvas.
   <input type="submit" value="Apply"> <!--TODO: have form be disabled until a rectangle is clicked on.-->
 </form>
 </div>
-<div class="rightdown" >
+<div class="rightdown">
 <h3>Viewer Settings</h3>
 <form method="post" target="hiddenframe">
   <strong>Constrain View to:</strong>
