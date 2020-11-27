@@ -440,6 +440,8 @@ def controller_socket(ws):
 
 			except KeyError as e:
 				app.logger.error('controller KeyError: ' + e.args[0])
+			except IndexError as e:
+				app.logger.error('controller IndexError (probably client of that index disconnected): ' + e.args[0])
 				
 	except geventwebsocket.exceptions.WebSocketError:
 		app.logger.error('client (controller) disconnected - WebSocketError')
