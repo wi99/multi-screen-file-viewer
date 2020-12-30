@@ -8,8 +8,7 @@ var div = document.getElementById("container");
 //Make the DIV element draggable:
 dragElement(div);
 
-var video = document.getElementById('display');
-
+var display = document.getElementById('display');
 var cc = document.getElementById('controlsContainer')
 
 if (!window.location.host)
@@ -42,19 +41,29 @@ websocket.onmessage = function(event) {
     case 'dim':
       div.style.width = data.w;
       div.style.height = data.h;
+
+      if (data.w == 'auto')
+        display.style.width = ''
+      else
+        display.style.width = '100%'
+      if (data.h == 'auto')
+        display.style.height = ''
+      else
+        display.style.height = '100%'
+
       div.dispatchEvent(new CustomEvent('resize'));
       break;
     case 'ctrl':
       // VIDEO
       switch (data.filetype) {
         case 'video':
-          video.currentTime = data.time;
+          display.currentTime = data.time;
           switch (data.action){
             case 'pause':
-              video.pause();
+              display.pause();
               break;
             case 'play':
-              video.play();
+              display.play();
               break;
             }
           break;
