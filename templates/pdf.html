@@ -139,7 +139,7 @@
           <span>Next</span>
         </button>
       </div>
-      <input type="number" id="pageNumber" class="toolbarField pageNumber" title="Page" value="1" size="4" min="1" tabindex="15">
+      <input type="number" id="pageNumber" class="toolbarField pageNumber" title="Page" value="{{ page }}" size="4" min="1" tabindex="15">
       <span id="numPages" class="toolbarLabel"></span>
     </div>
     <div id="toolbarViewerRight">
@@ -287,7 +287,8 @@
   }, false)
 
   
-  PDFViewerApplication.page = 1;
+  // TODO: load page from js based on websockets instead of passing from template. (and fix the pdf viewer)
+  PDFViewerApplication.page = {{ page }};
   loadingTask.promise.then(renderPages);
 </script>
   <div id="fullscreenToggle" class="floating-button">

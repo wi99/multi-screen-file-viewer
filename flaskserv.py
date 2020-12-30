@@ -93,6 +93,7 @@ class VideoState:
 	paused = True
 
 class PDFState:
+	# I kept this for speed reasons i guess, maybe is redundant and should delete?
 	page = params.get('pdfPage')
 
 def pos_event(ws):
@@ -218,7 +219,7 @@ def index():
 	if params.get('filetype') == 'image':
 		return render_template('image.html', filename=params.get('imageFilename'))
 	if params.get('filetype') == 'pdf':
-		return render_template('pdf.html', filename=params.get('pdfFilename'))
+		return render_template('pdf.html', filename=params.get('pdfFilename'), page=params.get('pdfPage'))
 	# video
 	return render_template('video.html', filename=params.get('videoFilename'), mimetype=params.get('videoMimetype'))
 
